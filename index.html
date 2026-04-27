@@ -582,6 +582,68 @@ async function migrateEncryption(sheetKey, rows) {
   console.log(`[QAHUBs] ✅ Migration done for "${sheetKey}"`);
 }
 
+// ─── FILE ATTACHMENT HELPERS ──────────────────────────────────────────────────
+// ปัญหา: ไฟล์แนบถูกเก็บเป็น base64 dataURL ขนาดใหญ่ใน field `data`
+// เมื่อรวมใน testCase/defect แล้วส่งผ่าน GET URL จะใหญ่เกิน URL limit ของ GAS (~8KB)
+// วิธีแก้: strip field `data` ออกก่อนส่งไป Sheet เก็บแค่ metadata
+//          dataURL เก็บใน localStorage แยกเพื่อให้ download ได้
+
+const FILE_CACHE_KEY = 'qah_file_cache';
+
+// บันทึก dataURL ลง localStorage โดยใช้ file id เป็น key
+function cacheFileData(fileId, dataUrl) {
+  try {
+    const cache = JSON.parse(localStorage.getItem(FILE_CACHE_KEY) || '{}');
+    cache[fileId] = dataUrl;
+    localStorage.setItem(FILE_CACHE_KEY, JSON.stringify(cache));
+  } catch(e) { console.warn('[QAHUBs] cacheFileData failed:', e.message); }
+}
+
+// ดึง dataURL จาก localStorage ตาม id
+function getCachedFileData(fileId) {
+  try {
+    const cache = JSON.parse(localStorage.getItem(FILE_CACHE_KEY) || '{}');
+    return cache[fileId] || null;
+  } catch(e) { return null; }
+}
+
+// ลบ dataURL ที่ไม่ใช้แล้วออกจาก cache (pass ชุด fileIds ที่ยังคงอยู่)
+function pruneFileCache(keepIds) {
+  try {
+    const cache = JSON.parse(localStorage.getItem(FILE_CACHE_KEY) || '{}');
+    const pruned = {};
+    keepIds.forEach(id => { if (cache[id]) pruned[id] = cache[id]; });
+    localStorage.setItem(FILE_CACHE_KEY, JSON.stringify(pruned));
+  } catch(e) {}
+}
+
+// Strip binary data ออกจาก file objects ใน testCase/defect ก่อนส่ง Sheet
+// เก็บแค่ metadata: id, name, size, type (ไม่มี data field)
+function stripFilesForSheet(obj) {
+  if (!obj || typeof obj !== 'object') return obj;
+  const stripped = { ...obj };
+
+  // strip files ระดับ top-level
+  if (Array.isArray(stripped.files)) {
+    stripped.files = stripped.files.map(f => {
+      const { data, ...meta } = f; // eslint-disable-line no-unused-vars
+      return meta;
+    });
+  }
+
+  // strip files ใน steps[]
+  if (Array.isArray(stripped.steps)) {
+    stripped.steps = stripped.steps.map(s => {
+      if (!Array.isArray(s.files)) return s;
+      return { ...s, files: s.files.map(f => {
+        const { data, ...meta } = f; // eslint-disable-line no-unused-vars
+        return meta;
+      })};
+    });
+  }
+  return stripped;
+}
+
 // ─── API CLIENT ───────────────────────────────────────────────────────────────
 // GAS ไม่รองรับ CORS preflight สำหรับ POST ปกติ
 // แก้โดยส่ง payload ผ่าน GET query param เป็น base64 (CORS-safe)
@@ -615,10 +677,12 @@ const api = {
     // Encrypt sensitive fields before writing to Sheet
     const encPayload = { ...payload };
     if (encPayload.data && typeof encPayload.data === 'object' && !Array.isArray(encPayload.data)) {
-      encPayload.data = encryptObj(payload.sheet, encPayload.data);
+      // ── Strip file binary data ก่อน encrypt/send ── ป้องกัน payload ใหญ่เกิน URL limit
+      let stripped = stripFilesForSheet(encPayload.data);
+      encPayload.data = encryptObj(payload.sheet, stripped);
     }
     if (encPayload.data && Array.isArray(encPayload.data)) {
-      encPayload.data = encPayload.data.map(item => encryptObj(payload.sheet, item));
+      encPayload.data = encPayload.data.map(item => encryptObj(payload.sheet, stripFilesForSheet(item)));
     }
     const jsonStr = JSON.stringify(encPayload);
     // Encode UTF-8 bytes -> base64 using loop (prevents stack overflow on large payloads)
@@ -3002,7 +3066,12 @@ function TCModal({ tc, task, project, testCases, setTestCases, defects, setDefec
     files.forEach(file => {
       const reader = new FileReader();
       reader.onload = (ev) => {
-        const fobj = { id:uid(), name:file.name, size:file.size, type:file.type, data:ev.target.result };
+        const fileId = uid();
+        const dataUrl = ev.target.result;
+        // เก็บ dataURL ใน localStorage cache แยกต่างหาก
+        // เพื่อไม่ให้ binary data ถูกรวมใน payload ที่ส่งไป Google Sheet (เกิน URL limit)
+        cacheFileData(fileId, dataUrl);
+        const fobj = { id:fileId, name:file.name, size:file.size, type:file.type, data:dataUrl };
         if (stepIdx >= 0) {
           const steps=[...form.steps];
           steps[stepIdx]={...steps[stepIdx], files:[...(steps[stepIdx].files||[]),fobj]};
@@ -3013,10 +3082,14 @@ function TCModal({ tc, task, project, testCases, setTestCases, defects, setDefec
       };
       reader.readAsDataURL(file);
     });
+    e.target.value = ''; // reset input
   };
 
   const downloadFile = (f) => {
-    const a = document.createElement('a'); a.href = f.data; a.download = f.name; a.click();
+    // ดึงจาก field `data` (ใน session) หรือจาก localStorage cache
+    const dataUrl = f.data || getCachedFileData(f.id);
+    if (!dataUrl) { showToast('ไม่พบข้อมูลไฟล์ในเครื่องนี้ (cache หมดอายุ)', 'error'); return; }
+    const a = document.createElement('a'); a.href = dataUrl; a.download = f.name; a.click();
   };
 
   const save = () => {
