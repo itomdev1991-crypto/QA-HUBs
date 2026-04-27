@@ -1095,33 +1095,41 @@ function App() {
 }
 
 // ─── LOGIN PAGE ───────────────────────────────────────────────────────────────
+// view: 'login' | 'register' | 'reset-find' | 'reset-set'
 function LoginPage({ users, setUsers, loginLogs, setLoginLogs, setCurrentUser, setPage, showToast, navigate, autoJoinCode }) {
-  const [email, setEmail] = useState('');
-  const [pass, setPass] = useState('');
-  // If there's a pending invite, default to register tab if user likely hasn't registered
-  const [isReg, setIsReg] = useState(false);
-  const [name, setName] = useState('');
-  const [err, setErr] = useState('');
+  const [view, setView]           = useState('login'); // 'login' | 'register' | 'reset-find' | 'reset-set'
+  const [email, setEmail]         = useState('');
+  const [pass, setPass]           = useState('');
+  const [showPass, setShowPass]   = useState(false);
+  const [name, setName]           = useState('');
+  const [err, setErr]             = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
 
-  // Check if there's an invite payload pending
+  // Reset-password state
+  const [resetEmail, setResetEmail]       = useState('');
+  const [resetUser, setResetUser]         = useState(null);   // found user object
+  const [newPass, setNewPass]             = useState('');
+  const [confirmPass, setConfirmPass]     = useState('');
+  const [showNew, setShowNew]             = useState(false);
+  const [showConfirm, setShowConfirm]     = useState(false);
+  const [resetErr, setResetErr]           = useState('');
+  const [resetDone, setResetDone]         = useState(false);
+
+  const switchTo = (v) => { setView(v); setErr(''); setResetErr(''); setResetDone(false); };
+
   const invitePayload = (() => { try { const p = localStorage.getItem('qah_join_payload'); return p ? JSON.parse(p) : null; } catch(e) { return null; } })();
 
+  // ── Login ──
   const login = async () => {
     const emailTrim = email.trim();
     const passTrim = pass.trim();
     if (!emailTrim || !passTrim) { setErr('กรุณากรอกอีเมลและรหัสผ่าน'); return; }
-    setLoginLoading(true);
-    setErr('');
+    setLoginLoading(true); setErr('');
     try {
-      // ดึงข้อมูล users ล่าสุดจาก Google Sheets ก่อนตรวจสอบ
       let freshUsers = users;
       if (GAS_URL) {
-        try {
-          freshUsers = await api.getAll('users');
-        } catch(e) {
-          console.warn('[QAHUBs] ดึง users จาก Sheets ไม่ได้ ใช้ข้อมูลใน memory แทน:', e.message);
-        }
+        try { freshUsers = await api.getAll('users'); }
+        catch(e) { console.warn('[QAHUBs] ดึง users จาก Sheets ไม่ได้ ใช้ข้อมูลใน memory แทน:', e.message); }
       }
       const u = freshUsers.find(u => String(u.email).trim().toLowerCase() === emailTrim.toLowerCase() && String(u.password).trim() === passTrim);
       if (!u) { setErr('อีเมลหรือรหัสผ่านไม่ถูกต้อง'); setLoginLoading(false); return; }
@@ -1129,21 +1137,15 @@ function LoginPage({ users, setUsers, loginLogs, setLoginLogs, setCurrentUser, s
       setLoginLogs(p => [{ id: uid(), userId: u.id, userName: u.name, at: now(), ip:'127.0.0.1' }, ...p]);
       showToast(`ยินดีต้อนรับ, ${u.name}!`);
       navigate('team-select');
-    } catch(e) {
-      setErr('เกิดข้อผิดพลาด: ' + e.message);
-    }
+    } catch(e) { setErr('เกิดข้อผิดพลาด: ' + e.message); }
     setLoginLoading(false);
   };
 
+  // ── Register ──
   const register = () => {
-    const nameTrim = name.trim();
-    const emailTrim = email.trim();
-    const passTrim = pass.trim();
+    const nameTrim = name.trim(), emailTrim = email.trim(), passTrim = pass.trim();
     if (!nameTrim || !emailTrim || !passTrim) { setErr('กรุณากรอกข้อมูลให้ครบ'); return; }
-    if (users.find(u => u.email.trim() === emailTrim)) {
-      setErr(`อีเมล "${emailTrim}" มีบัญชีอยู่แล้ว — กรุณาเข้าสู่ระบบแทน`);
-      return;
-    }
+    if (users.find(u => u.email.trim() === emailTrim)) { setErr(`อีเมล "${emailTrim}" มีบัญชีอยู่แล้ว — กรุณาเข้าสู่ระบบแทน`); return; }
     const colors = ['#4f8ef7','#34d399','#f472b6','#a78bfa','#fbbf24','#22d3ee'];
     const u = { id: uid(), name: nameTrim, email: emailTrim, password: passTrim, color: colors[users.length % colors.length] };
     setUsers(p => [...p, u]);
@@ -1153,40 +1155,227 @@ function LoginPage({ users, setUsers, loginLogs, setLoginLogs, setCurrentUser, s
     navigate('team-select');
   };
 
+  // ── Reset: Step 1 — find account by email ──
+  const handleFindAccount = async () => {
+    const emailTrim = resetEmail.trim();
+    if (!emailTrim) { setResetErr('กรุณากรอกอีเมล'); return; }
+    setResetErr('');
+    let freshUsers = users;
+    if (GAS_URL) {
+      try { freshUsers = await api.getAll('users'); }
+      catch(e) { /* use in-memory */ }
+    }
+    const found = freshUsers.find(u => String(u.email).trim().toLowerCase() === emailTrim.toLowerCase());
+    if (!found) { setResetErr('ไม่พบบัญชีที่ใช้อีเมลนี้ กรุณาตรวจสอบอีเมลอีกครั้ง'); return; }
+    setResetUser(found);
+    setNewPass(''); setConfirmPass('');
+    switchTo('reset-set');
+  };
+
+  // ── Reset: Step 2 — set new password ──
+  const handleSetNewPassword = () => {
+    setResetErr('');
+    if (!newPass.trim()) { setResetErr('กรุณากรอกรหัสผ่านใหม่'); return; }
+    if (newPass.trim().length < 6) { setResetErr('รหัสผ่านใหม่ต้องมีอย่างน้อย 6 ตัวอักษร'); return; }
+    if (newPass.trim() !== confirmPass.trim()) { setResetErr('รหัสผ่านทั้งสองไม่ตรงกัน'); return; }
+    const updated = { ...resetUser, password: newPass.trim() };
+    setUsers(p => p.map(u => u.id === resetUser.id ? updated : u));
+    setResetDone(true);
+    showToast('รีเซ็ตรหัสผ่านสำเร็จ');
+  };
+
+  const passStrength = (p) => {
+    if (!p) return null;
+    if (p.length < 6) return { label:'อ่อน', color:'var(--red)', pct:25 };
+    if (p.length < 10) return { label:'ปานกลาง', color:'var(--amber)', pct:55 };
+    if (p.length < 14) return { label:'ดี', color:'var(--cyan)', pct:75 };
+    return { label:'แข็งแกร่ง', color:'var(--green)', pct:100 };
+  };
+  const strength = passStrength(newPass);
+
+  // ── Shared error box ──
+  const ErrBox = ({ msg, extra }) => msg ? h('div', { style:{marginBottom:'12px',padding:'10px 12px',background:'var(--red-bg)',border:'1px solid var(--red)',borderRadius:'var(--r)',display:'flex',alignItems:'flex-start',gap:'8px'} },
+    h('span',{className:'ms ms-xs',style:{color:'var(--red)',flexShrink:0,marginTop:'1px'}},'warning'),
+    h('span',{style:{color:'var(--red)',fontSize:'12px',flex:1,lineHeight:'1.5'}}, msg, extra)
+  ) : null;
+
+  // ── Shared password input with toggle ──
+  const PassInput = ({ value, onChange, placeholder, show, onToggle, onEnter }) =>
+    h('div',{style:{position:'relative'}},
+      h('input',{className:'form-input',type:show?'text':'password',value,onChange,placeholder,style:{paddingRight:'40px'},
+        onKeyDown: onEnter ? (e=>e.key==='Enter'&&onEnter()) : undefined
+      }),
+      h('button',{type:'button',style:{position:'absolute',right:'8px',top:'50%',transform:'translateY(-50%)',background:'none',border:'none',color:'var(--text3)',cursor:'pointer',padding:'4px'},onClick:onToggle},
+        h('span',{className:'ms ms-xs'},show?'visibility_off':'visibility')
+      )
+    );
+
   return h('div', { className: 'login-page' },
     h('div', { className: 'login-card' },
       h('div', { className: 'login-logo' }, 'QAHub', h('span', null, 's')),
-      invitePayload && h('div', { style:{background:'var(--accent-bg)',border:'1px solid var(--accent)',borderRadius:'var(--r)',padding:'10px 14px',marginBottom:'16px',fontSize:'13px',textAlign:'center'} },
-        h('div', { style:{fontSize:'16px',marginBottom:'4px'} }, h(React.Fragment,null,h('span',{className:'ms ms-sm',style:{marginRight:'4px'}},'link'),'คำเชิญเข้าร่วมทีม')),
-        h('div', { style:{fontWeight:'600',color:'var(--accent)',marginBottom:'4px'} }, invitePayload.name || 'ทีม'),
-        h('div', { style:{color:'var(--text2)',fontSize:'12px'} }, isReg ? 'สร้างบัญชีเพื่อเข้าร่วม' : 'เข้าสู่ระบบเพื่อเข้าร่วม')
-      ),
-      h('p', { className: 'login-sub' }, isReg ? 'สร้างบัญชีใหม่' : 'Test Management Platform'),
-      isReg && h('div', { className: 'form-group' },
-        h('label', { className: 'form-label' }, 'ชื่อ'),
-        h('input', { className: 'form-input', value: name, onChange: e => setName(e.target.value), placeholder: 'ชื่อ-นามสกุล' })
-      ),
-      h('div', { className: 'form-group' },
-        h('label', { className: 'form-label' }, 'อีเมล'),
-        h('input', { className: 'form-input', type:'email', value: email, onChange: e => setEmail(e.target.value), placeholder: 'email@example.com', onKeyDown: e => e.key==='Enter' && (isReg?register():login()) })
-      ),
-      h('div', { className: 'form-group' },
-        h('label', { className: 'form-label' }, 'รหัสผ่าน'),
-        h('input', { className: 'form-input', type:'password', value: pass, onChange: e => setPass(e.target.value), placeholder: '••••••••', onKeyDown: e => e.key==='Enter' && (isReg?register():login()) })
-      ),
-      err && h('div', { style:{marginBottom:'12px'} },
-        h('p', { style:{color:'var(--red)',fontSize:'12px',display:'flex',alignItems:'center',gap:'6px',flexWrap:'wrap'} },
-          h('span',{className:'ms ms-xs',style:{color:'var(--red)',marginRight:'4px'}},'warning'), err,
-          err.includes('มีบัญชีอยู่แล้ว') && h('span', { className:'link', style:{color:'var(--accent)',fontSize:'12px',whiteSpace:'nowrap'},
-            onClick:()=>{ setIsReg(false); setErr(''); } }, '→ ไปหน้า Login')
+
+      // ════════════════════════════════════════
+      // VIEW: LOGIN
+      // ════════════════════════════════════════
+      view === 'login' && h(React.Fragment, null,
+        invitePayload && h('div', { style:{background:'var(--accent-bg)',border:'1px solid var(--accent)',borderRadius:'var(--r)',padding:'10px 14px',marginBottom:'16px',fontSize:'13px',textAlign:'center'} },
+          h('div', { style:{fontSize:'16px',marginBottom:'4px'} }, h(React.Fragment,null,h('span',{className:'ms ms-sm',style:{marginRight:'4px'}},'link'),'คำเชิญเข้าร่วมทีม')),
+          h('div', { style:{fontWeight:'600',color:'var(--accent)',marginBottom:'4px'} }, invitePayload.name || 'ทีม'),
+          h('div', { style:{color:'var(--text2)',fontSize:'12px'} }, 'เข้าสู่ระบบเพื่อเข้าร่วม')
+        ),
+        h('p', { className: 'login-sub' }, 'Test Management Platform'),
+        h('div', { className: 'form-group' },
+          h('label', { className: 'form-label' },
+            h('span',{className:'ms ms-xs',style:{marginRight:'4px'}},'email'), 'อีเมล'
+          ),
+          h('input', { className: 'form-input', type:'email', value: email, onChange: e=>setEmail(e.target.value), placeholder: 'email@example.com', onKeyDown: e=>e.key==='Enter'&&login() })
+        ),
+        h('div', { className: 'form-group' },
+          h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'6px'}},
+            h('label', { className: 'form-label', style:{margin:0} },
+              h('span',{className:'ms ms-xs',style:{marginRight:'4px'}},'lock'), 'รหัสผ่าน'
+            ),
+            h('span',{className:'link',style:{fontSize:'12px',color:'var(--text3)'},onClick:()=>{ setResetEmail(email); switchTo('reset-find'); }},
+              h('span',{className:'ms ms-xs',style:{marginRight:'3px'}},'help'), 'ลืมรหัสผ่าน?'
+            )
+          ),
+          h(PassInput, { value:pass, onChange:e=>setPass(e.target.value), placeholder:'••••••••', show:showPass, onToggle:()=>setShowPass(v=>!v), onEnter:login })
+        ),
+        h(ErrBox, { msg: err,
+          extra: err.includes('มีบัญชีอยู่แล้ว') && h('span',{className:'link',style:{color:'var(--accent)',fontSize:'12px',marginLeft:'4px'},onClick:()=>switchTo('login')},'→ Login')
+        }),
+        h('button', { className:'btn btn-primary', style:{width:'100%',justifyContent:'center',padding:'10px'}, disabled:loginLoading, onClick:login },
+          loginLoading ? h(LoadingDots,{small:true}) : h(React.Fragment,null,h('span',{className:'ms ms-sm',style:{marginRight:'6px'}},'login'),'เข้าสู่ระบบ')
+        ),
+        h('p', { style:{textAlign:'center',marginTop:'16px',fontSize:'13px',color:'var(--text2)'} },
+          'ยังไม่มีบัญชี? ',
+          h('span', { className:'link', onClick:()=>switchTo('register') }, 'สร้างบัญชี')
         )
       ),
-      h('button', { className: 'btn btn-primary', style:{width:'100%',justifyContent:'center',padding:'10px'}, disabled: loginLoading, onClick: isReg?register:login }, loginLoading ? h(LoadingDots, {small:true}) : (isReg?'สร้างบัญชี':'เข้าสู่ระบบ')),
-      h('p', { style:{textAlign:'center',marginTop:'16px',fontSize:'13px',color:'var(--text2)'} },
-        isReg ? 'มีบัญชีแล้ว? ' : 'ยังไม่มีบัญชี? ',
-        h('span', { className: 'link', onClick: () => { setIsReg(!isReg); setErr(''); } }, isReg ? 'เข้าสู่ระบบ' : 'สร้างบัญชี')
+
+      // ════════════════════════════════════════
+      // VIEW: REGISTER
+      // ════════════════════════════════════════
+      view === 'register' && h(React.Fragment, null,
+        invitePayload && h('div', { style:{background:'var(--accent-bg)',border:'1px solid var(--accent)',borderRadius:'var(--r)',padding:'10px 14px',marginBottom:'16px',fontSize:'13px',textAlign:'center'} },
+          h('div', { style:{fontSize:'16px',marginBottom:'4px'} }, h(React.Fragment,null,h('span',{className:'ms ms-sm',style:{marginRight:'4px'}},'link'),'คำเชิญเข้าร่วมทีม')),
+          h('div', { style:{fontWeight:'600',color:'var(--accent)',marginBottom:'4px'} }, invitePayload.name || 'ทีม'),
+          h('div', { style:{color:'var(--text2)',fontSize:'12px'} }, 'สร้างบัญชีเพื่อเข้าร่วม')
+        ),
+        h('p', { className: 'login-sub' }, 'สร้างบัญชีใหม่'),
+        h('div', { className: 'form-group' },
+          h('label', { className: 'form-label' }, h('span',{className:'ms ms-xs',style:{marginRight:'4px'}},'badge'),'ชื่อ'),
+          h('input', { className: 'form-input', value: name, onChange: e=>setName(e.target.value), placeholder: 'ชื่อ-นามสกุล' })
+        ),
+        h('div', { className: 'form-group' },
+          h('label', { className: 'form-label' }, h('span',{className:'ms ms-xs',style:{marginRight:'4px'}},'email'),'อีเมล'),
+          h('input', { className: 'form-input', type:'email', value: email, onChange: e=>setEmail(e.target.value), placeholder: 'email@example.com' })
+        ),
+        h('div', { className: 'form-group' },
+          h('label', { className: 'form-label' }, h('span',{className:'ms ms-xs',style:{marginRight:'4px'}},'lock'),'รหัสผ่าน'),
+          h(PassInput, { value:pass, onChange:e=>setPass(e.target.value), placeholder:'รหัสผ่าน (อย่างน้อย 6 ตัว)', show:showPass, onToggle:()=>setShowPass(v=>!v), onEnter:register })
+        ),
+        h(ErrBox, { msg: err,
+          extra: err.includes('มีบัญชีอยู่แล้ว') && h('span',{className:'link',style:{color:'var(--accent)',fontSize:'12px',marginLeft:'4px'},onClick:()=>switchTo('login')},'→ Login')
+        }),
+        h('button', { className:'btn btn-primary', style:{width:'100%',justifyContent:'center',padding:'10px'}, onClick:register },
+          h(React.Fragment,null,h('span',{className:'ms ms-sm',style:{marginRight:'6px'}},'person_add'),'สร้างบัญชี')
+        ),
+        h('p', { style:{textAlign:'center',marginTop:'16px',fontSize:'13px',color:'var(--text2)'} },
+          'มีบัญชีแล้ว? ',
+          h('span', { className:'link', onClick:()=>switchTo('login') }, 'เข้าสู่ระบบ')
+        )
       ),
-      !isReg && h('p', { style:{textAlign:'center',marginTop:'8px',fontSize:'11px',color:'var(--text3)'} }, )
+
+      // ════════════════════════════════════════
+      // VIEW: RESET — STEP 1 (find account)
+      // ════════════════════════════════════════
+      view === 'reset-find' && h(React.Fragment, null,
+        h('div',{style:{textAlign:'center',marginBottom:'20px'}},
+          h('div',{style:{width:'56px',height:'56px',borderRadius:'50%',background:'var(--amber-bg)',border:'2px solid var(--amber)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 12px'}},
+            h('span',{className:'ms ms-lg',style:{color:'var(--amber)'}},'lock_reset')
+          ),
+          h('div',{style:{fontWeight:'700',fontSize:'16px',marginBottom:'4px'}},'รีเซ็ตรหัสผ่าน'),
+          h('div',{style:{fontSize:'12px',color:'var(--text3)'}},'กรอกอีเมลที่ใช้ลงทะเบียน เพื่อค้นหาบัญชีของคุณ')
+        ),
+        h('div', { className: 'form-group' },
+          h('label', { className: 'form-label' }, h('span',{className:'ms ms-xs',style:{marginRight:'4px'}},'email'),'อีเมลที่ลงทะเบียน'),
+          h('input', { className: 'form-input', type:'email', value: resetEmail, onChange: e=>{ setResetEmail(e.target.value); setResetErr(''); }, placeholder: 'email@example.com', autoFocus:true,
+            onKeyDown: e=>e.key==='Enter'&&handleFindAccount()
+          })
+        ),
+        h(ErrBox, { msg: resetErr }),
+        h('button', { className:'btn btn-primary', style:{width:'100%',justifyContent:'center',padding:'10px'}, onClick:handleFindAccount },
+          h(React.Fragment,null,h('span',{className:'ms ms-sm',style:{marginRight:'6px'}},'search'),'ค้นหาบัญชี')
+        ),
+        h('button', { className:'btn', style:{width:'100%',justifyContent:'center',padding:'8px',marginTop:'8px'}, onClick:()=>switchTo('login') },
+          h('span',{className:'ms ms-xs',style:{marginRight:'6px'}},'arrow_back'),'กลับหน้า Login'
+        )
+      ),
+
+      // ════════════════════════════════════════
+      // VIEW: RESET — STEP 2 (set new password)
+      // ════════════════════════════════════════
+      view === 'reset-set' && h(React.Fragment, null,
+        resetDone
+          // ── SUCCESS ──
+          ? h('div',{style:{textAlign:'center',padding:'8px 0'}},
+              h('div',{style:{width:'64px',height:'64px',borderRadius:'50%',background:'var(--green-bg)',border:'2px solid var(--green)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px'}},
+                h('span',{className:'ms ms-lg',style:{color:'var(--green)'}},'check_circle')
+              ),
+              h('div',{style:{fontWeight:'700',fontSize:'16px',marginBottom:'6px',color:'var(--green)'}},'รีเซ็ตสำเร็จ!'),
+              h('div',{style:{fontSize:'13px',color:'var(--text2)',marginBottom:'20px',lineHeight:'1.6'}},
+                'รหัสผ่านของบัญชี ',
+                h('strong',{style:{color:'var(--text)'}}, resetUser?.name),
+                ' ได้ถูกเปลี่ยนแล้ว'
+              ),
+              h('button',{className:'btn btn-primary',style:{width:'100%',justifyContent:'center',padding:'10px'},onClick:()=>{ setResetDone(false); setResetUser(null); switchTo('login'); }},
+                h(React.Fragment,null,h('span',{className:'ms ms-sm',style:{marginRight:'6px'}},'login'),'ไปหน้าเข้าสู่ระบบ')
+              )
+            )
+          // ── FORM ──
+          : h(React.Fragment, null,
+              // Account info banner
+              h('div',{style:{display:'flex',alignItems:'center',gap:'12px',padding:'12px 14px',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:'var(--r2)',marginBottom:'20px'}},
+                renderUserAvatar(resetUser, 36),
+                h('div',null,
+                  h('div',{style:{fontWeight:'600',fontSize:'13px',color:'var(--text)'}},(resetUser?.name||'บัญชีของคุณ')),
+                  h('div',{style:{fontSize:'11px',color:'var(--text3)',marginTop:'2px'}},(resetUser?.email||''))
+                ),
+                h('span',{className:'ms ms-sm',style:{marginLeft:'auto',color:'var(--green)'}},'verified_user')
+              ),
+              h('div',{style:{fontWeight:'700',fontSize:'15px',marginBottom:'16px',display:'flex',alignItems:'center',gap:'8px'}},
+                h('span',{className:'ms ms-sm',style:{color:'var(--amber)'}},'lock_reset'), 'ตั้งรหัสผ่านใหม่'
+              ),
+              h('div', { className: 'form-group' },
+                h('label', { className: 'form-label' }, h('span',{className:'ms ms-xs',style:{marginRight:'4px'}},'lock_open'),'รหัสผ่านใหม่'),
+                h(PassInput, { value:newPass, onChange:e=>{ setNewPass(e.target.value); setResetErr(''); }, placeholder:'รหัสผ่านใหม่ (อย่างน้อย 6 ตัว)', show:showNew, onToggle:()=>setShowNew(v=>!v) }),
+                newPass && strength && h('div',{style:{marginTop:'8px'}},
+                  h('div',{style:{display:'flex',justifyContent:'space-between',marginBottom:'4px'}},
+                    h('span',{style:{fontSize:'11px',color:'var(--text3)'}},'ความแข็งแกร่ง'),
+                    h('span',{style:{fontSize:'11px',fontWeight:'600',color:strength.color}},strength.label)
+                  ),
+                  h('div',{className:'progress-bar'},h('div',{className:'progress-fill',style:{width:strength.pct+'%',background:strength.color}}))
+                )
+              ),
+              h('div', { className: 'form-group' },
+                h('label', { className: 'form-label' }, h('span',{className:'ms ms-xs',style:{marginRight:'4px'}},'check_circle'),'ยืนยันรหัสผ่านใหม่'),
+                h('div',{style:{position:'relative'}},
+                  h(PassInput, { value:confirmPass, onChange:e=>{ setConfirmPass(e.target.value); setResetErr(''); }, placeholder:'ยืนยันรหัสผ่านอีกครั้ง', show:showConfirm, onToggle:()=>setShowConfirm(v=>!v), onEnter:handleSetNewPassword }),
+                  confirmPass && newPass && h('span',{style:{position:'absolute',right:'40px',top:'50%',transform:'translateY(-50%)',pointerEvents:'none'}},
+                    h('span',{className:'ms ms-xs',style:{color:confirmPass===newPass?'var(--green)':'var(--red)'}},confirmPass===newPass?'check_circle':'cancel')
+                  )
+                )
+              ),
+              h(ErrBox, { msg: resetErr }),
+              h('button',{className:'btn btn-primary',style:{width:'100%',justifyContent:'center',padding:'10px'},onClick:handleSetNewPassword},
+                h(React.Fragment,null,h('span',{className:'ms ms-sm',style:{marginRight:'6px'}},'lock_reset'),'ตั้งรหัสผ่านใหม่')
+              ),
+              h('button',{className:'btn',style:{width:'100%',justifyContent:'center',padding:'8px',marginTop:'8px'},onClick:()=>switchTo('reset-find')},
+                h('span',{className:'ms ms-xs',style:{marginRight:'6px'}},'arrow_back'),'กลับ'
+              )
+            )
+      )
     )
   );
 }
