@@ -561,16 +561,16 @@ async function migrateEncryption(sheetKey, rows) {
 
   if (needsMigration.length === 0) return; // ทุก row เข้ารหัสแล้ว
 
-  console.log(`[QAHub] 🔐 Migrating ${needsMigration.length} unencrypted row(s) in "${sheetKey}"...`);
+  console.log(`[QAHUBs] 🔐 Migrating ${needsMigration.length} unencrypted row(s) in "${sheetKey}"...`);
 
   // อัปเดตทีละ row (update ใช้ encryptObj ผ่าน _write อัตโนมัติ)
   const updates = needsMigration.map(obj =>
     api.update(sheetKey, obj).catch(e =>
-      console.warn(`[QAHub] migrate update failed id=${obj.id}:`, e.message)
+      console.warn(`[QAHUBs] migrate update failed id=${obj.id}:`, e.message)
     )
   );
   await Promise.all(updates);
-  console.log(`[QAHub] ✅ Migration done for "${sheetKey}"`);
+  console.log(`[QAHUBs] ✅ Migration done for "${sheetKey}"`);
 }
 
 // ─── API CLIENT ───────────────────────────────────────────────────────────────
@@ -600,7 +600,7 @@ const api = {
   async _write(payload) {
     if (!payload.sheet || !SHEETS_VALID.has(payload.sheet)) {
       const msg = `_write: invalid sheet "${payload.sheet}" (action=${payload.action})`;
-      console.error('[QAHub]', msg, payload);
+      console.error('[QAHUBs]', msg, payload);
       throw new Error(msg);
     }
     // Encrypt sensitive fields before writing to Sheet
@@ -736,8 +736,8 @@ function App() {
 
       // ── Auto-migrate: เข้ารหัสข้อมูลเก่าที่ยังเป็น plain-text ──
       // ทำงาน background ไม่ block UI (ข้อมูลใน state เป็น plain แล้วจาก decryptObj)
-      migrateEncryption('users', u).catch(e => console.warn('[QAHub] migrate users:', e.message));
-      migrateEncryption('teams', te).catch(e => console.warn('[QAHub] migrate teams:', e.message));
+      migrateEncryption('users', u).catch(e => console.warn('[QAHUBs] migrate users:', e.message));
+      migrateEncryption('teams', te).catch(e => console.warn('[QAHUBs] migrate teams:', e.message));
     }).catch(e => {
       setSyncErr(e.message);
       // Fallback to localStorage
@@ -784,7 +784,7 @@ function App() {
     const newMap = Object.fromEntries(newData.map(o => [o.id, o]));
 
     const onErr = (action, id, e) => {
-      console.error(`[QAHub] ${action} ${sheet}#${id} failed:`, e.message);
+      console.error(`[QAHUBs] ${action} ${sheet}#${id} failed:`, e.message);
       setToast({ msg: `⚠️ Sync ล้มเหลว (${action} ${sheet}): ${e.message}`, type:'error', id: uid() });
     };
 
@@ -1111,7 +1111,7 @@ function LoginPage({ users, setUsers, loginLogs, setLoginLogs, setCurrentUser, s
         try {
           freshUsers = await api.getAll('users');
         } catch(e) {
-          console.warn('[QAHub] ดึง users จาก Sheets ไม่ได้ ใช้ข้อมูลใน memory แทน:', e.message);
+          console.warn('[QAHUBs] ดึง users จาก Sheets ไม่ได้ ใช้ข้อมูลใน memory แทน:', e.message);
         }
       }
       const u = freshUsers.find(u => String(u.email).trim().toLowerCase() === emailTrim.toLowerCase() && String(u.password).trim() === passTrim);
