@@ -1398,7 +1398,7 @@ function InviteWaitingPage({ teamName, teamId, currentUser, pendingMembers, setP
         ),
         h('div', { style:{background:'var(--green-bg)',border:'1px solid var(--green)',borderRadius:'var(--r2)',padding:'20px',marginBottom:'20px'} },
           h('div', { style:{fontSize:'36px',fontWeight:'700',color:'var(--green)',lineHeight:'1'} }, countdown),
-          h('div', { style:{color:'var(--green)',fontSize:'13px',marginTop:'4px'} }, 'วินาที — กำลังพาไปหน้าเลือกทีม...')
+          h('div', { style:{color:'var(--green)',fontSize:'13px',marginTop:'4px'} }, 'กำลังพาไปหน้าเลือกทีม...')
         ),
         h('button', { className:'btn btn-primary', style:{justifyContent:'center',padding:'10px 24px'},
           onClick: () => { setCountdown(0); }
