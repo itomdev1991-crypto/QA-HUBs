@@ -44,38 +44,59 @@
 
   /* ── LIGHT THEME (stays dark-gray in Netflix spirit) ── */
   [data-theme="light"] {
-    --bg: #222222;
-    --bg2: #2a2a2a;
-    --bg3: #333333;
-    --bg4: #3d3d3d;
-    --border: #3a3a3a;
-    --border2: #4a4a4a;
-    --text: #f0f0f0;
-    --text2: #b0b0b0;
-    --text3: #777777;
+    --bg: #f5f5f5;
+    --bg2: #ffffff;
+    --bg3: #f0f0f0;
+    --bg4: #e8e8e8;
+    --border: #e0e0e0;
+    --border2: #d0d0d0;
+    --text: #1a1a1a;
+    --text2: #4a4a4a;
+    --text3: #888888;
     --accent: #e50914;
     --accent2: #b81d24;
-    --accent-bg: rgba(229,9,20,0.15);
-    --green: #46d369;
-    --green-bg: rgba(70,211,105,0.12);
+    --accent-bg: rgba(229,9,20,0.08);
+    --green: #1a9e3f;
+    --green-bg: rgba(26,158,63,0.10);
     --red: #e50914;
-    --red-bg: rgba(229,9,20,0.12);
-    --amber: #f5a623;
-    --amber-bg: rgba(245,166,35,0.12);
-    --purple: #b197fc;
-    --purple-bg: rgba(177,151,252,0.12);
-    --cyan: #63e6be;
-    --cyan-bg: rgba(99,230,190,0.12);
-    --pink: #f783ac;
-    --pink-bg: rgba(247,131,172,0.12);
-    --shadow: 0 8px 32px rgba(0,0,0,0.8);
-    --shadow2: 0 2px 12px rgba(0,0,0,0.5);
+    --red-bg: rgba(229,9,20,0.08);
+    --amber: #b86e00;
+    --amber-bg: rgba(184,110,0,0.10);
+    --purple: #6c3fc5;
+    --purple-bg: rgba(108,63,197,0.10);
+    --cyan: #0e7a63;
+    --cyan-bg: rgba(14,122,99,0.10);
+    --pink: #c2185b;
+    --pink-bg: rgba(194,24,91,0.10);
+    --shadow: 0 8px 32px rgba(0,0,0,0.12);
+    --shadow2: 0 2px 12px rgba(0,0,0,0.08);
   }
-  [data-theme="light"] ::-webkit-scrollbar-track { background: #2a2a2a; }
-  [data-theme="light"] ::-webkit-scrollbar-thumb { background: #4a4a4a; }
-  [data-theme="light"] .modal-overlay { background: rgba(0,0,0,0.75); }
+  [data-theme="light"] ::-webkit-scrollbar-track { background: #f0f0f0; }
+  [data-theme="light"] ::-webkit-scrollbar-thumb { background: #cccccc; border-radius: 2px; }
+  [data-theme="light"] ::-webkit-scrollbar-thumb:hover { background: #aaaaaa; }
+  [data-theme="light"] .modal-overlay { background: rgba(0,0,0,0.45); }
+  [data-theme="light"] body { background: #f5f5f5; }
+  [data-theme="light"] .sidebar { background: #fafafa; border-right-color: #e0e0e0; }
+  [data-theme="light"] .topbar { background: linear-gradient(to bottom,rgba(255,255,255,0.98) 0%,#ffffff 100%); }
+  [data-theme="light"] th { background: #f8f8f8; color: #666666; }
+  [data-theme="light"] tr:hover td { background: rgba(0,0,0,0.02); }
+  [data-theme="light"] .form-input, [data-theme="light"] .form-textarea { background: #ffffff; border-color: #d0d0d0; color: #1a1a1a; }
+  [data-theme="light"] .form-select { background-color: #ffffff; border-color: #d0d0d0; color: #1a1a1a; }
+  [data-theme="light"] .form-input:focus, [data-theme="light"] .form-select:focus, [data-theme="light"] .form-textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(229,9,20,0.12); }
+  [data-theme="light"] .nav-item { color: #555555; }
+  [data-theme="light"] .nav-item:hover { background: #eeeeee; color: #1a1a1a; }
+  [data-theme="light"] .nav-item.active { background: var(--accent); color: #fff; }
+  [data-theme="light"] .card { background: #ffffff; border-color: #e0e0e0; }
+  [data-theme="light"] .card:hover { border-color: #cccccc; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+  [data-theme="light"] .stat-card { background: #ffffff; border-color: #e0e0e0; }
+  [data-theme="light"] .btn { background: #f0f0f0; border-color: #d0d0d0; color: #1a1a1a; }
+  [data-theme="light"] .btn:hover { background: #e8e8e8; border-color: #bbbbbb; }
+  [data-theme="light"] .modal { background: #ffffff; border-color: #e0e0e0; }
+  [data-theme="light"] .login-card { background: rgba(255,255,255,0.98); border-color: #e0e0e0; box-shadow: 0 8px 40px rgba(0,0,0,0.12); }
+  [data-theme="light"] .login-page { background: linear-gradient(135deg,#f5f5f5 0%,#ebebeb 50%,#f0f0f0 100%); }
+  [data-theme="light"] input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.3); }
   [data-theme="light"] .form-select {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23b0b0b0' d='M6 8L0 0h12z'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23666666' d='M6 8L0 0h12z'/%3E%3C/svg%3E");
   }
   /* theme toggle button */
   .theme-toggle {
@@ -163,6 +184,24 @@
   .form-label .req { color: var(--red); }
   .form-input, .form-select, .form-textarea { width: 100%; background: #111; border: 1px solid var(--border2); border-radius: 3px; padding: 8px 12px; color: var(--text); font-size: 13px; font-family: var(--font); transition: border 0.15s; outline: none; }
   .form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--accent); }
+  /* ── Date input calendar icon — clearly visible in dark mode ── */
+  input[type="date"] { color-scheme: dark; }
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Crect x='3' y='4' width='18' height='18' rx='2' stroke='%23e50914' stroke-width='2'/%3E%3Cline x1='3' y1='9' x2='21' y2='9' stroke='%23e50914' stroke-width='2'/%3E%3Cline x1='8' y1='2' x2='8' y2='6' stroke='%23e50914' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='16' y1='2' x2='16' y2='6' stroke='%23e50914' stroke-width='2' stroke-linecap='round'/%3E%3Ccircle cx='8' cy='13' r='1' fill='%23e50914'/%3E%3Ccircle cx='12' cy='13' r='1' fill='%23e50914'/%3E%3Ccircle cx='16' cy='13' r='1' fill='%23e50914'/%3E%3Ccircle cx='8' cy='17' r='1' fill='%23e50914'/%3E%3Ccircle cx='12' cy='17' r='1' fill='%23e50914'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-size: 18px 18px;
+    background-position: center;
+    width: 22px;
+    height: 22px;
+    opacity: 1;
+    cursor: pointer;
+    border-radius: 3px;
+    padding: 2px;
+    transition: background-color 0.15s;
+  }
+  input[type="date"]::-webkit-calendar-picker-indicator:hover {
+    background-color: rgba(229,9,20,0.15);
+  }
   .form-textarea { resize: vertical; min-height: 80px; }
   .form-select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%238e9abb' d='M6 8L0 0h12z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; padding-right: 30px; }
   .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
@@ -494,7 +533,7 @@ const detectionOpts = ['Positive','Negative'];
 
 // ─── GOOGLE SHEETS CONFIG ─────────────────────────────────────────────────────
 // ใส่ URL ของ Google Apps Script Web App ที่ Deploy แล้ว
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbyzxEN4u1psmWolm2FBGSstrAo4mui8EcK660-JUfTnbBEGBjAT0x_jUv8fQ3GB-V3s/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbzz5Ov1Z58rdFxwV8z_AWiBq5q6cWYRqx5G2e7lkd1gls4iezXlWNfKbxUgAxF8VhiH/exec';
 const SS_ID   = '1x-WEHf1Q1wF_A7E8ngx1Nu7i7oCWZ74Ys3sgqHtW0lk'; // Google Spreadsheet ID
 
 // ─── FIELD ENCRYPTION ────────────────────────────────────────────────────────
@@ -701,6 +740,18 @@ const api = {
   update(sheet, data)     { return this._write({ action:'update',     sheet, id:data.id, data }); },
   delete(sheet, id)       { return this._write({ action:'delete',     sheet, id }); },
   bulkInsert(sheet, data) { return this._write({ action:'bulkInsert', sheet, data }); },
+
+  // ── Raw write (no sheet validation) — for sendVerifyCode / verifyCode ──
+  async rawWrite(payload) {
+    const jsonStr = JSON.stringify(payload);
+    const bytes   = new TextEncoder().encode(jsonStr);
+    let _bin = ''; for (let i = 0; i < bytes.length; i++) _bin += String.fromCharCode(bytes[i]);
+    const b64 = btoa(_bin);
+    const url = `${GAS_URL}?payload=${encodeURIComponent(b64)}&t=${Date.now()}`;
+    const res = await fetch(url, { redirect: 'follow' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json(); // return {ok, data/error} directly
+  },
 };
 
 // ─── LOCAL SESSION (เก็บเฉพาะ session ไม่เอา data) ────────────────────────────
@@ -1168,6 +1219,14 @@ function LoginPage({ users, setUsers, loginLogs, setLoginLogs, setCurrentUser, s
   const [err, setErr] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
 
+  // ── Email Verify OTP State ──
+  const [showVerify, setShowVerify]         = useState(false);
+  const [verifyCode, setVerifyCode]         = useState("");
+  const [verifyErr, setVerifyErr]           = useState("");
+  const [verifyLoading, setVerifyLoading]   = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [pendingUser, setPendingUser]       = useState(null);
+
   // ── Reset Password State ──
   const [showReset, setShowReset] = useState(false);
   const [resetStep, setResetStep] = useState('email'); // 'email' | 'newpass'
@@ -1253,22 +1312,74 @@ function LoginPage({ users, setUsers, loginLogs, setLoginLogs, setCurrentUser, s
     setLoginLoading(false);
   };
 
-  const register = () => {
+  // ── Start countdown timer for resend ──────────────────────────────
+  const startResendTimer = () => {
+    setResendCooldown(60);
+    const iv = setInterval(() => {
+      setResendCooldown(prev => {
+        if (prev <= 1) { clearInterval(iv); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  // ── Send OTP via backend then open verify modal ────────────────────
+  const sendOTPAndOpenModal = async (userObj) => {
+    setLoginLoading(true);
+    setErr('');
+    try {
+      const res = await api.rawWrite({ action: 'sendVerifyCode', email: userObj.email });
+      if (!res.ok) { setErr('ส่งอีเมลไม่สำเร็จ: ' + res.error); setLoginLoading(false); return; }
+      setPendingUser(userObj);
+      setVerifyCode('');
+      setVerifyErr('');
+      setShowVerify(true);
+      startResendTimer();
+    } catch(e) {
+      setErr('เกิดข้อผิดพลาด: ' + e.message);
+    }
+    setLoginLoading(false);
+  };
+
+  // ── Confirm OTP & complete registration ────────────────────────────
+  const confirmVerify = async () => {
+    const codeTrim = verifyCode.trim();
+    if (codeTrim.length !== 6) { setVerifyErr('กรุณากรอกรหัส 6 หลัก'); return; }
+    setVerifyLoading(true);
+    setVerifyErr('');
+    try {
+      const res = await api.rawWrite({ action: 'verifyCode', email: pendingUser.email, code: codeTrim });
+      if (!res.ok) { setVerifyErr(res.error || 'รหัสไม่ถูกต้อง'); setVerifyLoading(false); return; }
+      // OTP OK — create the account
+      const colors = ['#4f8ef7','#34d399','#f472b6','#a78bfa','#fbbf24','#22d3ee'];
+      const u = pendingUser;
+      setUsers(p => [...p, u]);
+      setCurrentUser(u);
+      setLoginLogs(p => [{ id: uid(), userId: u.id, userName: u.name, at: now(), ip:'127.0.0.1', isNew:true }, ...p]);
+      setShowVerify(false);
+      showToast('ยืนยันอีเมลสำเร็จ — ยินดีต้อนรับ! 🎉');
+      navigate('team-select');
+    } catch(e) {
+      setVerifyErr('เกิดข้อผิดพลาด: ' + e.message);
+    }
+    setVerifyLoading(false);
+  };
+
+  const register = async () => {
     const nameTrim = name.trim();
     const emailTrim = email.trim();
     const passTrim = pass.trim();
     if (!nameTrim || !emailTrim || !passTrim) { setErr('กรุณากรอกข้อมูลให้ครบ'); return; }
-    if (users.find(u => u.email.trim() === emailTrim)) {
+    const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRe.test(emailTrim)) { setErr('รูปแบบอีเมลไม่ถูกต้อง'); return; }
+    if (passTrim.length < 6) { setErr('รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร'); return; }
+    if (users.find(u => u.email.trim().toLowerCase() === emailTrim.toLowerCase())) {
       setErr(`อีเมล "${emailTrim}" มีบัญชีอยู่แล้ว — กรุณาเข้าสู่ระบบแทน`);
       return;
     }
     const colors = ['#4f8ef7','#34d399','#f472b6','#a78bfa','#fbbf24','#22d3ee'];
     const u = { id: uid(), name: nameTrim, email: emailTrim, password: passTrim, color: colors[users.length % colors.length] };
-    setUsers(p => [...p, u]);
-    setCurrentUser(u);
-    setLoginLogs(p => [{ id: uid(), userId: u.id, userName: u.name, at: now(), ip:'127.0.0.1', isNew:true }, ...p]);
-    showToast('สร้างบัญชีสำเร็จ!');
-    navigate('team-select');
+    await sendOTPAndOpenModal(u);
   };
 
   return h('div', { className: 'login-page' },
@@ -1307,6 +1418,67 @@ function LoginPage({ users, setUsers, loginLogs, setLoginLogs, setCurrentUser, s
       !isReg && h('p', { style:{textAlign:'center',marginTop:'8px',fontSize:'12px'} },
         h('span', { className:'link', style:{color:'var(--text3)',cursor:'pointer'}, onClick:()=>setShowReset(true) },
           h('span',{className:'ms ms-xs',style:{marginRight:'3px',verticalAlign:'middle'}},'lock_reset'), 'ลืม Password?'
+        )
+      )
+    ),
+
+    // ── EMAIL VERIFY OTP MODAL ──
+    showVerify && h('div', { className:'modal-overlay', style:{zIndex:10002} },
+      h('div', { className:'modal modal-sm', style:{maxWidth:'420px',height:'auto',borderColor:'var(--accent)'} },
+        h('div', { className:'modal-header', style:{borderColor:'var(--accent)'} },
+          h('span', { className:'modal-title', style:{display:'flex',alignItems:'center',gap:'8px'} },
+            h('span',{className:'ms ms-sm',style:{color:'var(--accent)'}},'mark_email_unread'),
+            'ยืนยันอีเมล'
+          )
+        ),
+        h('div', { className:'modal-body' },
+          h('div', { style:{textAlign:'center',marginBottom:'20px'} },
+            h('div', { style:{width:'56px',height:'56px',borderRadius:'50%',background:'var(--accent-bg)',border:'2px solid var(--accent)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 12px'} },
+              h('span', { className:'ms ms-xl', style:{color:'var(--accent)',fontSize:'28px'} }, 'shield_lock')
+            ),
+            h('div', { style:{fontWeight:'600',fontSize:'15px',marginBottom:'6px'} }, 'กรุณายืนยันอีเมลของคุณ'),
+            h('div', { style:{color:'var(--text2)',fontSize:'13px',lineHeight:'1.6'} },
+              'เราส่งรหัส 6 หลักไปยัง ',
+              h('strong', { style:{color:'var(--accent)'} }, pendingUser?.email),
+              h('br'),
+              'รหัสจะหมดอายุใน 10 นาที'
+            )
+          ),
+          h('div', { className:'form-group' },
+            h('label', { className:'form-label', style:{textAlign:'center',display:'block'} }, 'รหัสยืนยัน (OTP)'),
+            h('input', {
+              className: 'form-input',
+              type: 'text',
+              inputMode: 'numeric',
+              maxLength: 6,
+              value: verifyCode,
+              onChange: e => { setVerifyCode(e.target.value.replace(/\D/g,'')); setVerifyErr(''); },
+              onKeyDown: e => e.key === 'Enter' && confirmVerify(),
+              placeholder: '000000',
+              autoFocus: true,
+              style: { textAlign:'center', fontSize:'24px', fontFamily:'var(--mono)', letterSpacing:'8px', fontWeight:'700' }
+            })
+          ),
+          verifyErr && h('p', { style:{color:'var(--red)',fontSize:'12px',textAlign:'center',marginBottom:'12px',display:'flex',alignItems:'center',justifyContent:'center',gap:'4px'} },
+            h('span',{className:'ms ms-xs'},'warning'), verifyErr
+          ),
+          h('button', {
+            className: 'btn btn-primary',
+            style: { width:'100%', justifyContent:'center', padding:'10px', marginBottom:'12px' },
+            disabled: verifyLoading || verifyCode.length !== 6,
+            onClick: confirmVerify
+          }, verifyLoading ? 'กำลังตรวจสอบ...' : h(React.Fragment, null, h('span',{className:'ms ms-sm'},'verified'), ' ยืนยัน')),
+          h('div', { style:{textAlign:'center',fontSize:'13px',color:'var(--text2)'} },
+            'ไม่ได้รับรหัส? ',
+            resendCooldown > 0
+              ? h('span', { style:{color:'var(--text3)'} }, 'ส่งอีกครั้งใน ' + resendCooldown + 'วิ')
+              : h('span', { className:'link', style:{color:'var(--accent)',cursor:'pointer'}, onClick:async()=>{ await sendOTPAndOpenModal(pendingUser); } }, 'ส่งรหัสอีกครั้ง')
+          )
+        ),
+        h('div', { className:'modal-footer', style:{justifyContent:'center'} },
+          h('button', { className:'btn btn-sm', onClick:()=>{ setShowVerify(false); setPendingUser(null); } },
+            h('span',{className:'ms ms-xs'},'arrow_back'), ' ย้อนกลับ'
+          )
         )
       )
     ),
@@ -1761,8 +1933,15 @@ function Topbar({ currentUser, setCurrentUser, users, setUsers, currentTeam, set
           )
         )
       ),
-      h('button', { className: 'theme-toggle', onClick: toggleTheme, title: theme === 'dark' ? 'Switch to Light' : 'Switch to Dark' },
-        h('span',{className:'ms'},theme==='dark'?'light_mode':'dark_mode')
+      h('button', { className: 'theme-toggle', onClick: toggleTheme, title: theme === 'dark' ? 'สลับเป็นโหมดสว่าง' : 'สลับเป็นโหมดมืด',
+        style: { width:'auto', padding:'0 10px', gap:'5px', fontSize:'12px',
+          background: theme === 'light' ? '#fff3e0' : 'var(--bg3)',
+          borderColor: theme === 'light' ? '#f5a623' : 'var(--border)',
+          color: theme === 'light' ? '#b86e00' : 'var(--text2)'
+        }
+      },
+        h('span',{className:'ms ms-sm'},theme==='dark'?'light_mode':'dark_mode'),
+        h('span',{style:{fontSize:'11px',fontWeight:'600',letterSpacing:'0.3px'}}, theme==='dark'?'Light':'Dark')
       ),
       h('div', { className: 'user-pill', style:{position:'relative'} },
         h('div', {
