@@ -3,8 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>QA Hub — Test Management</title>
+<title>QAHUBs — Test Management</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
 <style>
   :root {
     /* Netflix-style dark gray palette */
@@ -88,7 +89,15 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: var(--font); background: var(--bg); color: var(--text); font-size: 14px; min-height: 100vh; }
   
-  /* SCROLLBAR */
+  /* MATERIAL SYMBOLS */
+  .ms { font-family: 'Material Symbols Rounded'; font-weight: normal; font-style: normal; font-size: 18px; line-height: 1; letter-spacing: normal; text-transform: none; display: inline-block; white-space: nowrap; word-wrap: normal; direction: ltr; -webkit-font-smoothing: antialiased; vertical-align: middle; user-select: none; }
+  .ms-sm { font-size: 16px; }
+  .ms-xs { font-size: 14px; }
+  .ms-lg { font-size: 24px; }
+  .ms-xl { font-size: 36px; }
+  .ms-xxl { font-size: 64px; }
+
+
   ::-webkit-scrollbar { width: 4px; height: 4px; }
   ::-webkit-scrollbar-track { background: #111; }
   ::-webkit-scrollbar-thumb { background: #444; border-radius: 2px; }
@@ -102,7 +111,7 @@
   .logo span { color: var(--text); font-family: var(--display); }
   .team-badge { background: var(--accent-bg); border: 1px solid var(--accent); color: var(--accent); padding: 3px 10px; border-radius: 3px; font-size: 11px; font-weight: 600; cursor: pointer; letter-spacing: 0.5px; text-transform: uppercase; }
   .topbar-right { display: flex; align-items: center; gap: 10px; }
-  .user-pill { display: flex; align-items: center; gap: 8px; background: var(--bg3); border: 1px solid var(--border); border-radius: 4px; padding: 4px 12px 4px 6px; cursor: pointer; transition: background 0.15s; }
+  .user-pill { display: flex; align-items: center; gap: 8px; background: var(--bg3); border: 1px solid var(--border); border-radius: 4px; padding: 4px 10px 4px 6px; cursor: pointer; transition: background 0.15s; }
   .user-pill:hover { background: var(--bg4); }
   .avatar { width: 26px; height: 26px; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; }
   
@@ -433,7 +442,7 @@ class ErrorBoundary extends React.Component {
   render() {
     if (this.state.error) {
       return h('div', {style:{padding:'40px',color:'#f87171',background:'#1a1a2e',minHeight:'100vh'}},
-        h('h2',null,'❌ เกิดข้อผิดพลาด'),
+        h('h2',null,h('span',{className:'ms ms-lg',style:{color:'#f87171',marginRight:'8px',verticalAlign:'middle'}},'error'),' เกิดข้อผิดพลาด'),
         h('pre',{style:{fontSize:'12px',marginTop:'16px',whiteSpace:'pre-wrap'}}, this.state.error.toString()),
         h('button',{style:{marginTop:'16px',padding:'8px 16px',cursor:'pointer'},onClick:()=>this.setState({error:null})},'ลองใหม่')
       );
@@ -785,7 +794,7 @@ function App() {
 
     const onErr = (action, id, e) => {
       console.error(`[QAHUBs] ${action} ${sheet}#${id} failed:`, e.message);
-      setToast({ msg: `⚠️ Sync ล้มเหลว (${action} ${sheet}): ${e.message}`, type:'error', id: uid() });
+      setToast({ msg: `Sync ล้มเหลว (${action} ${sheet}): ${e.message}`, type:'error', id: uid() });
     };
 
     // INSERT new rows
@@ -867,7 +876,7 @@ function App() {
       setTasksState(ta); setTestCasesState(tc); setDefectsState(d);
       setLogsState(l); setLoginLogsState(ll); setPendingMembersState(pm);
       setLoading(false);
-      showToast('🔄 โหลดข้อมูลใหม่จาก Google Sheets แล้ว');
+      showToast('โหลดข้อมูลใหม่จาก Google Sheets แล้ว');
     }).catch(e => { setLoading(false); showToast('โหลดไม่ได้: ' + e.message, 'error'); });
   }, [USE_GAS]);
 
@@ -1010,10 +1019,10 @@ function App() {
   // LOADING SCREEN
   if (loading) {
     return h('div', { style:{minHeight:'100vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',background:'var(--bg)',gap:'16px'} },
-      h('div', { className:'login-logo', style:{fontSize:'28px'} }, 'QA', h('span',null,'Hub')),
+      h('div', { className:'login-logo', style:{fontSize:'28px'} }, 'QAHub', h('span',null,'s')),
       h(LoadingDots),
       syncErr && h('div', { style:{marginTop:'8px',padding:'10px 16px',background:'var(--amber-bg)',border:'1px solid var(--amber)',borderRadius:'8px',color:'var(--amber)',fontSize:'12px',maxWidth:'400px',textAlign:'center'} },
-        '⚠️ เชื่อมต่อ Google Sheets ไม่ได้: ', syncErr, h('br'), 'ใช้ข้อมูลจาก localStorage แทน'
+        h('span',{className:'ms ms-xs',style:{marginRight:'4px',color:'var(--amber)'}},'warning'), 'เชื่อมต่อ Google Sheets ไม่ได้: ', syncErr, h('br'), 'ใช้ข้อมูลจาก localStorage แทน'
       )
     );
   }
@@ -1146,9 +1155,9 @@ function LoginPage({ users, setUsers, loginLogs, setLoginLogs, setCurrentUser, s
 
   return h('div', { className: 'login-page' },
     h('div', { className: 'login-card' },
-      h('div', { className: 'login-logo' }, 'QA', h('span', null, 'Hub')),
+      h('div', { className: 'login-logo' }, 'QAHub', h('span', null, 's')),
       invitePayload && h('div', { style:{background:'var(--accent-bg)',border:'1px solid var(--accent)',borderRadius:'var(--r)',padding:'10px 14px',marginBottom:'16px',fontSize:'13px',textAlign:'center'} },
-        h('div', { style:{fontSize:'16px',marginBottom:'4px'} }, '🔗 คำเชิญเข้าร่วมทีม'),
+        h('div', { style:{fontSize:'16px',marginBottom:'4px'} }, h(React.Fragment,null,h('span',{className:'ms ms-sm',style:{marginRight:'4px'}},'link'),'คำเชิญเข้าร่วมทีม')),
         h('div', { style:{fontWeight:'600',color:'var(--accent)',marginBottom:'4px'} }, invitePayload.name || 'ทีม'),
         h('div', { style:{color:'var(--text2)',fontSize:'12px'} }, isReg ? 'สร้างบัญชีเพื่อเข้าร่วม' : 'เข้าสู่ระบบเพื่อเข้าร่วม')
       ),
@@ -1167,7 +1176,7 @@ function LoginPage({ users, setUsers, loginLogs, setLoginLogs, setCurrentUser, s
       ),
       err && h('div', { style:{marginBottom:'12px'} },
         h('p', { style:{color:'var(--red)',fontSize:'12px',display:'flex',alignItems:'center',gap:'6px',flexWrap:'wrap'} },
-          '⚠️ ', err,
+          h('span',{className:'ms ms-xs',style:{color:'var(--red)',marginRight:'4px'}},'warning'), err,
           err.includes('มีบัญชีอยู่แล้ว') && h('span', { className:'link', style:{color:'var(--accent)',fontSize:'12px',whiteSpace:'nowrap'},
             onClick:()=>{ setIsReg(false); setErr(''); } }, '→ ไปหน้า Login')
         )
@@ -1239,8 +1248,8 @@ function InviteWaitingPage({ teamName, teamId, currentUser, pendingMembers, setP
   if (status === 'approved') {
     return h('div', { style:{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'var(--bg)',padding:'24px'} },
       h('div', { style:{width:'100%',maxWidth:'480px',textAlign:'center'} },
-        h('div', { style:{fontSize:'72px',marginBottom:'16px',animation:'pulse 1s infinite'} }, '✅'),
-        h('div', { style:{fontSize:'22px',fontWeight:'700',color:'var(--accent)',marginBottom:'4px'} }, 'QA', h('span', { style:{color:'var(--text)'} }, 'Hub')),
+        h('span',{className:'ms',style:{fontSize:'72px',color:'var(--green)',display:'block',marginBottom:'16px',animation:'pulse 1s infinite'}}, 'check_circle'),
+        h('div', { style:{fontSize:'22px',fontWeight:'700',color:'var(--accent)',marginBottom:'4px'} }, 'QAHub', h('span', { style:{color:'var(--text)'} }, 's')),
         h('h2', { style:{fontSize:'20px',fontWeight:'600',margin:'16px 0 8px',color:'var(--green)'} }, 'ได้รับอนุมัติเรียบร้อยแล้ว! 🎉'),
         h('p', { style:{color:'var(--text2)',fontSize:'14px',lineHeight:'1.7',marginBottom:'24px'} },
           'คุณได้รับการอนุมัติเข้าร่วมทีม ',
@@ -1278,8 +1287,8 @@ function InviteWaitingPage({ teamName, teamId, currentUser, pendingMembers, setP
   if (status === 'rejected') {
     return h('div', { style:{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'var(--bg)',padding:'24px'} },
       h('div', { style:{width:'100%',maxWidth:'480px',textAlign:'center'} },
-        h('div', { style:{fontSize:'72px',marginBottom:'16px'} }, '❌'),
-        h('div', { style:{fontSize:'22px',fontWeight:'700',color:'var(--accent)',marginBottom:'4px'} }, 'QA', h('span', { style:{color:'var(--text)'} }, 'Hub')),
+        h('span',{className:'ms',style:{fontSize:'72px',color:'var(--red)',display:'block',marginBottom:'16px'}}, 'cancel'),
+        h('div', { style:{fontSize:'22px',fontWeight:'700',color:'var(--accent)',marginBottom:'4px'} }, 'QAHub', h('span', { style:{color:'var(--text)'} }, 's')),
         h('h2', { style:{fontSize:'20px',fontWeight:'600',margin:'16px 0 8px',color:'var(--red)'} }, 'ไม่ได้รับการอนุมัติ'),
         h('p', { style:{color:'var(--text2)',fontSize:'14px',lineHeight:'1.7',marginBottom:'24px'} },
           'คำขอเข้าร่วมทีม ',
@@ -1287,13 +1296,13 @@ function InviteWaitingPage({ teamName, teamId, currentUser, pendingMembers, setP
           ' ถูกปฏิเสธโดย Admin'
         ),
         h('div', { style:{background:'var(--red-bg)',border:'1px solid var(--red)',borderRadius:'var(--r2)',padding:'16px 20px',marginBottom:'20px',textAlign:'left'} },
-          h('div', { style:{fontSize:'16px',marginBottom:'6px',fontWeight:'600',color:'var(--red)'} }, '🚫 คำขอถูกปฏิเสธ'),
+          h('div', { style:{fontSize:'16px',marginBottom:'6px',fontWeight:'600',color:'var(--red)'} }, h(React.Fragment,null,h('span',{className:'ms ms-sm',style:{marginRight:'6px'}},'block'),'คำขอถูกปฏิเสธ')),
           h('p', { style:{color:'var(--text2)',fontSize:'13px'} }, 'Admin ได้ปฏิเสธคำขอของคุณ หากต้องการสามารถส่งคำขอใหม่ได้ หรือติดต่อ Admin เพื่อสอบถามเหตุผล')
         ),
         h('div', { style:{display:'flex',flexDirection:'column',gap:'10px'} },
           h('button', { className:'btn btn-primary', style:{justifyContent:'center',padding:'10px 24px',width:'100%'},
             onClick: reRequestJoin
-          }, '🔄 ขอเข้าร่วมใหม่อีกครั้ง'),
+          }, h(React.Fragment,null,h('span',{className:'ms ms-sm',style:{marginRight:'6px'}},'refresh'),'ขอเข้าร่วมใหม่อีกครั้ง')),
           h('button', { className:'btn', style:{justifyContent:'center',padding:'10px 24px',width:'100%'},
             onClick: goCreateTeam
           }, '+ สร้างทีมใหม่')
@@ -1313,8 +1322,8 @@ function InviteWaitingPage({ teamName, teamId, currentUser, pendingMembers, setP
   );
   return h('div', { style:{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'var(--bg)',padding:'24px'} },
     h('div', { style:{width:'100%',maxWidth:'480px',textAlign:'center'} },
-      h('div', { style:{fontSize:'64px',marginBottom:'16px'} }, '⏳'),
-      h('div', { style:{fontSize:'22px',fontWeight:'700',color:'var(--accent)',marginBottom:'4px'} }, 'QA', h('span', { style:{color:'var(--text)'} }, 'Hub')),
+      h('span',{className:'ms',style:{fontSize:'64px',color:'var(--amber)',display:'block',marginBottom:'16px',textAlign:'center'}},'hourglass_top'),
+      h('div', { style:{fontSize:'22px',fontWeight:'700',color:'var(--accent)',marginBottom:'4px'} }, 'QAHub', h('span', { style:{color:'var(--text)'} }, 's')),
       h('h2', { style:{fontSize:'20px',fontWeight:'600',margin:'16px 0 8px'} }, 'รอการอนุมัติจาก Admin'),
       h('p', { style:{color:'var(--text2)',fontSize:'14px',lineHeight:'1.7',marginBottom:'24px'} },
         'คำขอเข้าร่วมทีม ',
@@ -1323,15 +1332,15 @@ function InviteWaitingPage({ teamName, teamId, currentUser, pendingMembers, setP
         'กรุณารอการอนุมัติ Admin จะแจ้งให้ทราบเมื่ออนุมัติ'
       ),
       h('div', { style:{background:'var(--amber-bg)',border:'1px solid var(--amber)',borderRadius:'var(--r2)',padding:'16px 20px',marginBottom:'16px',textAlign:'left'} },
-        h('div', { style:{fontWeight:'600',color:'var(--amber)',marginBottom:'8px',fontSize:'13px'} }, '📋 สถานะคำขอ'),
+        h('div', { style:{fontWeight:'600',color:'var(--amber)',marginBottom:'8px',fontSize:'13px'} }, h(React.Fragment,null,h('span',{className:'ms ms-xs',style:{marginRight:'4px'}},'list_alt'),'สถานะคำขอ')),
         myPending.map(p => h('div', { key:p.id, style:{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:'13px',marginBottom:'4px'} },
           h('span', { style:{color:'var(--text2)'} }, p.teamName || p.teamId),
-          h('span', { className:'badge badge-amber' }, '⏳ รออนุมัติ')
+          h('span', { className:'badge badge-amber' }, h(React.Fragment,null,h('span',{className:'ms ms-xs',style:{marginRight:'3px'}},'hourglass_top'),'รออนุมัติ'))
         )),
         myPending.length===0 && h('div', { style:{color:'var(--text2)',fontSize:'13px',display:'flex',alignItems:'center',gap:'6px'} }, h(LoadingDots,{small:true}))
       ),
       h('div', { style:{fontSize:'12px',color:'var(--text3)',marginBottom:'20px'} },
-        '🔄 ตรวจสอบสถานะอัตโนมัติทุก 15 วินาที (อีก ', h('strong',{style:{color:'var(--text2)'}}, nextRefresh), ' วินาที)'
+        h('span',{className:'ms ms-xs',style:{marginRight:'4px'}},'refresh'), 'ตรวจสอบสถานะอัตโนมัติทุก 15 วินาที (อีก ', h('strong',{style:{color:'var(--text2)'}}, nextRefresh), ' วินาที)'
       ),
       h('button', { className:'btn btn-primary', style:{justifyContent:'center',padding:'10px 24px',width:'100%'},
         onClick: goCreateTeam
@@ -1402,7 +1411,7 @@ function TeamSelectPage({ currentUser, teams, setTeams, members, setMembers, myT
   return h('div', { style:{minHeight:'100vh', background:'var(--bg)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'24px'} },
     h('div', { style:{width:'100%', maxWidth:'560px'} },
       h('div', { style:{textAlign:'center', marginBottom:'32px'} },
-        h('div', { style:{fontSize:'22px', fontWeight:'700', color:'var(--accent)'} }, 'QA', h('span', { style:{color:'var(--text)'} }, 'Hub')),
+        h('div', { style:{fontSize:'22px', fontWeight:'700', color:'var(--accent)'} }, 'QAHub', h('span', { style:{color:'var(--text)'} }, 's')),
         h('p', { style:{color:'var(--text2)', marginTop:'6px'} }, `สวัสดี ${currentUser.name} — เลือกหรือสร้างทีม`)
       ),
       myTeams.length > 0 && h('div', { style:{marginBottom:'24px'} },
@@ -1417,13 +1426,13 @@ function TeamSelectPage({ currentUser, teams, setTeams, members, setMembers, myT
       ),
       // Pending approval section
       pendingMembers && pendingMembers.filter(p => p.userId===currentUser.id && p.status==='pending').length > 0 && h('div', { style:{marginBottom:'24px'} },
-        h('p', { className:'section-title', style:{marginBottom:'12px',color:'var(--amber)'} }, '⏳ รอการอนุมัติ'),
+        h('p', { className:'section-title', style:{marginBottom:'12px',color:'var(--amber)'} }, h(React.Fragment,null,h('span',{className:'ms ms-xs',style:{marginRight:'4px'}},'hourglass_top'),'รอการอนุมัติ')),
         h('div', { style:{display:'flex', flexDirection:'column', gap:'10px'} },
           pendingMembers.filter(p => p.userId===currentUser.id && p.status==='pending').map(p =>
             h('div', { key:p.id, style:{background:'var(--amber-bg)',border:'1px solid var(--amber)',borderRadius:'var(--r)',padding:'12px 16px',display:'flex',alignItems:'center',justifyContent:'space-between'} },
               h('div', null,
                 h('div', { style:{fontWeight:'600',marginBottom:'2px'} }, p.teamName || p.teamId),
-                h('div', { style:{fontSize:'12px',color:'var(--amber)'} }, '⏳ รอ Admin อนุมัติเข้าร่วมทีม')
+                h('div', { style:{fontSize:'12px',color:'var(--amber)'} }, h(React.Fragment,null,h('span',{className:'ms ms-xs',style:{marginRight:'4px'}},'hourglass_top'),'รอ Admin อนุมัติเข้าร่วมทีม'))
               ),
               h('span', { className:'badge badge-amber' }, 'รออนุมัติ')
             )
@@ -1453,7 +1462,7 @@ function TeamSelectPage({ currentUser, teams, setTeams, members, setMembers, myT
           fontSize:'12px', color: joinErr.includes('มีการขอเข้าร่วม') ? 'var(--amber)' : 'var(--red)',
           display:'flex', alignItems:'flex-start', gap:'6px'
         } },
-          h('span', null, joinErr.includes('มีการขอเข้าร่วม') ? '⏳' : '⚠️'),
+          h('span', null, joinErr.includes('มีการขอเข้าร่วม') ? h('span',{className:'ms ms-xs'},'hourglass_top') : h('span',{className:'ms ms-xs'},'warning')),
           h('span', null, joinErr)
         ),
         h('div', { style:{display:'flex', gap:'8px'} },
@@ -1466,18 +1475,17 @@ function TeamSelectPage({ currentUser, teams, setTeams, members, setMembers, myT
 }
 
 // ─── TOPBAR ───────────────────────────────────────────────────────────────────
-function Topbar({ currentUser, currentTeam, setCurrentTeam, setCurrentUser, setPage, navigate, myTeams, theme, toggleTheme, syncing, USE_GAS, refreshFromSheets, isAdmin }) {
+function Topbar({ currentUser, setCurrentUser, users, setUsers, currentTeam, setCurrentTeam, setPage, navigate, myTeams, theme, toggleTheme, syncing, USE_GAS, refreshFromSheets, isAdmin, showToast }) {
   const [showMenu, setShowMenu] = useState(false);
   const [showSheetPass, setShowSheetPass] = useState(false);
   const [sheetPass, setSheetPass] = useState('');
   const [sheetPassErr, setSheetPassErr] = useState('');
+  const [showProfile, setShowProfile] = useState(false);
 
   const openGoogleSheet = () => {
-    // Use the logged-in admin's own password
     const correctPass = currentUser?.password?.trim() || '';
     if (sheetPass.trim() === correctPass && correctPass !== '') {
       setSheetPass(''); setSheetPassErr(''); setShowSheetPass(false);
-      // Build correct Google Sheets URL from SS_ID constant
       const sheetUrl = (typeof SS_ID !== 'undefined' && SS_ID)
         ? `https://docs.google.com/spreadsheets/d/${SS_ID}/edit`
         : 'https://docs.google.com/spreadsheets';
@@ -1487,13 +1495,25 @@ function Topbar({ currentUser, currentTeam, setCurrentTeam, setCurrentUser, setP
     }
   };
 
+  // Render avatar: icon or initial
+  const renderAvatar = (user, size=26) => {
+    const fs = Math.round(size * 0.55);
+    if (user?.avatarIcon) {
+      return h('div', { className:'avatar', style:{width:size+'px',height:size+'px',background:user.color+'22',color:user.color,fontSize:fs+'px'} },
+        h('span',{className:'ms',style:{fontSize:fs+'px',lineHeight:'1'}},user.avatarIcon)
+      );
+    }
+    return h('div', { className:'avatar', style:{width:size+'px',height:size+'px',background:user?.color+'22',color:user?.color,fontSize:Math.round(size*0.42)+'px',fontWeight:'700'} },
+      (user?.name||'?')[0].toUpperCase()
+    );
+  };
+
   return h('div', { className: 'topbar' },
     h('div', { className: 'topbar-left' },
-      h('div', { className: 'logo' }, 'QA', h('span', null, 'Hub')),
+      h('div', { className: 'logo' }, 'QAHub', h('span', null, 's')),
       h('div', { className: 'team-badge', onClick: () => { setCurrentTeam(null); setPage('team-select'); } }, currentTeam?.name || 'No Team')
     ),
     h('div', { className: 'topbar-right' },
-      /* Refresh button - always visible when USE_GAS */
       USE_GAS && h('button', {
         className: 'btn btn-sm',
         title: 'โหลดข้อมูลใหม่จาก Google Sheets',
@@ -1504,10 +1524,9 @@ function Topbar({ currentUser, currentTeam, setCurrentTeam, setCurrentUser, setP
           color: syncing ? 'var(--amber)' : 'var(--text)',
         }
       },
-        h('span', null, syncing ? '⏳' : '🔄'),
+        h('span', null, h('span',{className:'ms ms-sm'},syncing?'sync':'refresh')),
         syncing ? 'Syncing...' : 'โหลดใหม่'
       ),
-      /* Google Sheets button - Admin only */
       isAdmin && h('button', {
         className: 'btn btn-sm',
         title: 'เปิด Google Sheets (Admin only)',
@@ -1516,14 +1535,13 @@ function Topbar({ currentUser, currentTeam, setCurrentTeam, setCurrentUser, setP
           background: 'var(--green-bg)', borderColor: 'var(--green)', color: 'var(--green)'
         }
       },
-        '📊 Google Sheets'
+        h(React.Fragment,null,h('span',{className:'ms ms-sm'},'table_chart'),' Google Sheets')
       ),
-      /* Sheet password modal */
       showSheetPass && h('div', { className:'modal-overlay', style:{zIndex:10000}, onClick:e=>{if(e.target.className==='modal-overlay')setShowSheetPass(false)} },
         h('div', { className:'modal modal-sm', style:{maxWidth:'360px'} },
           h('div', { className:'modal-header' },
-            h('span', { className:'modal-title' }, '🔐 ยืนยันตัวตน — Google Sheets'),
-            h('button', { className:'modal-close', onClick:()=>setShowSheetPass(false) }, '✕')
+            h('span', { className:'modal-title' }, h(React.Fragment,null,h('span',{className:'ms ms-sm',style:{marginRight:'6px'}},'lock'),'ยืนยันตัวตน — Google Sheets')),
+            h('button', { className:'modal-close', onClick:()=>setShowSheetPass(false) }, h('span',{className:'ms ms-sm'},'close'))
           ),
           h('div', { className:'modal-body' },
             h('p', { style:{color:'var(--text2)',fontSize:'13px',marginBottom:'12px'} }, `กรอกรหัสผ่านที่ใช้ Login ของบัญชี "${currentUser?.name || 'Admin'}" เพื่อยืนยัน`),
@@ -1540,21 +1558,319 @@ function Topbar({ currentUser, currentTeam, setCurrentTeam, setCurrentUser, setP
         )
       ),
       h('button', { className: 'theme-toggle', onClick: toggleTheme, title: theme === 'dark' ? 'Switch to Light' : 'Switch to Dark' },
-        theme === 'dark' ? '☀️' : '🌙'
+        h('span',{className:'ms'},theme==='dark'?'light_mode':'dark_mode')
       ),
-      h('div', { className: 'user-pill', onClick: () => setShowMenu(!showMenu), style:{position:'relative'} },
-        h('div', { className: 'avatar', style:{background:currentUser?.color+'22', color:currentUser?.color} }, (currentUser?.name||'?')[0]),
-        h('span', { style:{fontSize:'13px'} }, currentUser?.name),
-        showMenu && h('div', { style:{position:'absolute', top:'36px', right:0, background:'var(--bg2)', border:'1px solid var(--border)', borderRadius:'var(--r)', minWidth:'160px', zIndex:100, boxShadow:'var(--shadow)'} },
-          h('div', { style:{padding:'8px 0'} },
-            h('div', { style:{padding:'8px 14px', fontSize:'11px', color:'var(--text3)', borderBottom:'1px solid var(--border)'} }, currentUser?.email),
-            h('div', { style:{padding:'8px 14px', cursor:'pointer', fontSize:'13px'}, onClick:()=>{ setCurrentTeam(null); setShowMenu(false); } }, 'เปลี่ยนทีม'),
-            h('div', { style:{padding:'8px 14px', cursor:'pointer', fontSize:'13px', color:'var(--red)'}, onClick:()=>{ setCurrentUser(null); setCurrentTeam(null); setPage('login'); setSession('qah_session_user',null); setSession('qah_session_team',null); } }, 'ออกจากระบบ')
+      h('div', { className: 'user-pill', style:{position:'relative'} },
+        h('div', {
+          style:{display:'flex',alignItems:'center',gap:'8px',cursor:'pointer'},
+          onClick: () => setShowMenu(!showMenu)
+        },
+          renderAvatar(currentUser, 26),
+          h('span', { style:{fontSize:'13px'} }, currentUser?.name),
+          h('span',{className:'ms ms-xs',style:{opacity:0.5,fontSize:'12px'}},showMenu?'expand_less':'expand_more')
+        ),
+        showMenu && h(React.Fragment, null,
+          h('div', {
+            style:{position:'fixed',inset:0,zIndex:99},
+            onClick:()=>setShowMenu(false)
+          }),
+          h('div', { style:{position:'absolute', top:'38px', right:0, background:'var(--bg2)', border:'1px solid var(--border)', borderRadius:'var(--r2)', minWidth:'200px', zIndex:100, boxShadow:'var(--shadow)',overflow:'hidden'} },
+            h('div', { style:{padding:'12px 14px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', gap:'10px'} },
+              renderAvatar(currentUser, 36),
+              h('div',null,
+                h('div',{style:{fontWeight:'600',fontSize:'13px',color:'var(--text)'}},currentUser?.name),
+                h('div',{style:{fontSize:'11px',color:'var(--text3)'}},currentUser?.email)
+              )
+            ),
+            h('div', { style:{padding:'4px 0'} },
+              h('div', { style:{padding:'8px 14px', cursor:'pointer', fontSize:'13px', display:'flex', alignItems:'center', gap:'10px', transition:'background 0.12s'},
+                onMouseEnter:e=>e.currentTarget.style.background='var(--bg3)',
+                onMouseLeave:e=>e.currentTarget.style.background='transparent',
+                onClick:()=>{ setShowMenu(false); setShowProfile(true); }
+              },
+                h('span',{className:'ms ms-sm',style:{color:'var(--text2)'}},'manage_accounts'), 'ตั้งค่าโปรไฟล์'
+              ),
+              h('div', { style:{padding:'8px 14px', cursor:'pointer', fontSize:'13px', display:'flex', alignItems:'center', gap:'10px', transition:'background 0.12s'},
+                onMouseEnter:e=>e.currentTarget.style.background='var(--bg3)',
+                onMouseLeave:e=>e.currentTarget.style.background='transparent',
+                onClick:()=>{ setCurrentTeam(null); setShowMenu(false); }
+              },
+                h('span',{className:'ms ms-sm',style:{color:'var(--text2)'}},'swap_horiz'), 'เปลี่ยนทีม'
+              ),
+              h('div', { style:{height:'1px',background:'var(--border)',margin:'4px 0'}} ),
+              h('div', { style:{padding:'8px 14px', cursor:'pointer', fontSize:'13px', display:'flex', alignItems:'center', gap:'10px', color:'var(--red)', transition:'background 0.12s'},
+                onMouseEnter:e=>e.currentTarget.style.background='var(--bg3)',
+                onMouseLeave:e=>e.currentTarget.style.background='transparent',
+                onClick:()=>{ setCurrentUser(null); setCurrentTeam(null); setPage('login'); setSession('qah_session_user',null); setSession('qah_session_team',null); }
+              },
+                h('span',{className:'ms ms-sm'},'logout'), 'ออกจากระบบ'
+              )
+            )
           )
         )
+      ),
+      showProfile && h(ProfileModal, {
+        currentUser, users, setUsers, setCurrentUser,
+        showToast, onClose:()=>setShowProfile(false)
+      })
+    )
+  );
+}
+
+// ─── PROFILE MODAL ────────────────────────────────────────────────────────────
+const AVATAR_ICONS = [
+  // People & Identity
+  'person','face','face_2','face_3','face_4','face_5','face_6',
+  'sentiment_satisfied','mood','psychology','engineering','construction',
+  // Tech & Work
+  'code','terminal','bug_report','devices','laptop','smartphone','cloud',
+  'science','biotech','architecture','design_services','developer_mode',
+  // Fun & Personality
+  'star','favorite','bolt','local_fire_department','rocket_launch','auto_awesome',
+  'emoji_events','sports_esports','headphones','music_note','palette','brush',
+  // Nature & Objects
+  'pets','local_florist','eco','diamond','coffee','cake',
+  'travel_explore','public','nightlight','sunny','storm',
+];
+const AVATAR_COLORS = [
+  '#4f8ef7','#34d399','#f472b6','#a78bfa','#fbbf24','#22d3ee',
+  '#e50914','#f97316','#84cc16','#06b6d4','#8b5cf6','#ec4899',
+  '#14b8a6','#f59e0b','#6366f1','#10b981','#ef4444','#3b82f6',
+];
+
+function ProfileModal({ currentUser, users, setUsers, setCurrentUser, showToast, onClose }) {
+  const [tab, setTab] = useState('profile');
+  const [name, setName] = useState(currentUser?.name || '');
+  const [selIcon, setSelIcon] = useState(currentUser?.avatarIcon || '');
+  const [selColor, setSelColor] = useState(currentUser?.color || '#4f8ef7');
+  const [saving, setSaving] = useState(false);
+
+  const [oldPass, setOldPass] = useState('');
+  const [newPass, setNewPass] = useState('');
+  const [confirmPass, setConfirmPass] = useState('');
+  const [passErr, setPassErr] = useState('');
+  const [showOld, setShowOld] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  const previewUser = { ...currentUser, name: name || currentUser?.name, avatarIcon: selIcon, color: selColor };
+
+  const renderPreviewAvatar = (size=56) => {
+    const fs = Math.round(size * 0.5);
+    if (selIcon) {
+      return h('div', { style:{
+        width:size+'px',height:size+'px',borderRadius:'50%',
+        background:selColor+'22',color:selColor,
+        display:'flex',alignItems:'center',justifyContent:'center',
+        border:'2px solid '+selColor+'44', flexShrink:0
+      }}, h('span',{className:'ms',style:{fontSize:fs+'px',lineHeight:'1'}},selIcon));
+    }
+    return h('div', { style:{
+      width:size+'px',height:size+'px',borderRadius:'50%',
+      background:selColor+'22',color:selColor,
+      display:'flex',alignItems:'center',justifyContent:'center',
+      fontSize:Math.round(size*0.38)+'px',fontWeight:'700',
+      border:'2px solid '+selColor+'44', flexShrink:0
+    }}, (name||currentUser?.name||'?')[0].toUpperCase());
+  };
+
+  const saveProfile = () => {
+    if (!name.trim()) { showToast('กรุณากรอกชื่อ', 'error'); return; }
+    setSaving(true);
+    const updated = { ...currentUser, name: name.trim(), avatarIcon: selIcon, color: selColor };
+    setUsers(p => p.map(u => u.id === currentUser.id ? updated : u));
+    setCurrentUser(updated);
+    setTimeout(() => { setSaving(false); showToast('บันทึกโปรไฟล์แล้ว'); }, 300);
+  };
+
+  const changePassword = () => {
+    setPassErr('');
+    if (!oldPass.trim()) { setPassErr('กรุณากรอกรหัสผ่านปัจจุบัน'); return; }
+    if (oldPass.trim() !== currentUser?.password?.trim()) { setPassErr('รหัสผ่านปัจจุบันไม่ถูกต้อง'); return; }
+    if (!newPass.trim()) { setPassErr('กรุณากรอกรหัสผ่านใหม่'); return; }
+    if (newPass.trim().length < 6) { setPassErr('รหัสผ่านใหม่ต้องมีอย่างน้อย 6 ตัวอักษร'); return; }
+    if (newPass.trim() !== confirmPass.trim()) { setPassErr('รหัสผ่านใหม่ไม่ตรงกัน'); return; }
+    const updated = { ...currentUser, password: newPass.trim() };
+    setUsers(p => p.map(u => u.id === currentUser.id ? updated : u));
+    setCurrentUser(updated);
+    setOldPass(''); setNewPass(''); setConfirmPass('');
+    showToast('เปลี่ยนรหัสผ่านสำเร็จ');
+  };
+
+  const passStrength = (p) => {
+    if (!p) return null;
+    const len = p.length;
+    if (len < 6) return { label:'อ่อน', color:'var(--red)', pct:25 };
+    if (len < 10) return { label:'ปานกลาง', color:'var(--amber)', pct:55 };
+    if (len < 14) return { label:'ดี', color:'var(--cyan)', pct:75 };
+    return { label:'แข็งแกร่ง', color:'var(--green)', pct:100 };
+  };
+  const strength = passStrength(newPass);
+
+  const el = h('div', { className:'modal-overlay', onClick:e=>{ if(e.target.className==='modal-overlay') onClose(); } },
+    h('div', { className:'modal modal-sm', style:{maxWidth:'500px',height:'auto',maxHeight:'90vh'} },
+      h('div', { className:'modal-header' },
+        h('span', { className:'modal-title', style:{display:'flex',alignItems:'center',gap:'8px'} },
+          h('span',{className:'ms ms-sm'},'manage_accounts'), 'ตั้งค่าโปรไฟล์'
+        ),
+        h('button', { className:'modal-close', onClick:onClose }, h('span',{className:'ms ms-sm'},'close'))
+      ),
+
+      // Tabs
+      h('div', { style:{display:'flex',borderBottom:'1px solid var(--border)',flexShrink:0} },
+        [['profile','person','โปรไฟล์'],['password','lock','รหัสผ่าน']].map(([t,icon,label])=>
+          h('div', { key:t,
+            style:{padding:'10px 20px',fontSize:'13px',fontWeight:'600',cursor:'pointer',display:'flex',alignItems:'center',gap:'6px',
+              color: tab===t ? 'var(--text)' : 'var(--text3)',
+              borderBottom: tab===t ? '3px solid var(--accent)' : '3px solid transparent',
+              marginBottom:'-1px', transition:'all 0.15s'
+            },
+            onClick:()=>setTab(t)
+          },
+            h('span',{className:'ms ms-xs'},icon), label
+          )
+        )
+      ),
+
+      h('div', { className:'modal-body' },
+        // ── PROFILE TAB ──
+        tab==='profile' && h('div', null,
+          // Preview
+          h('div', { style:{display:'flex',alignItems:'center',gap:'16px',marginBottom:'24px',padding:'16px',background:'var(--bg3)',borderRadius:'var(--r2)',border:'1px solid var(--border)'} },
+            renderPreviewAvatar(56),
+            h('div',null,
+              h('div',{style:{fontWeight:'700',fontSize:'15px',color:'var(--text)'}}, name || currentUser?.name),
+              h('div',{style:{fontSize:'12px',color:'var(--text3)',marginTop:'2px'}}, currentUser?.email),
+              selIcon
+                ? h('div',{style:{fontSize:'11px',color:selColor,marginTop:'4px',display:'flex',alignItems:'center',gap:'4px'}},
+                    h('span',{className:'ms ms-xs'},selIcon),' ', selIcon)
+                : h('div',{style:{fontSize:'11px',color:'var(--text3)',marginTop:'4px'}},'ใช้ตัวอักษรแรกของชื่อ')
+            )
+          ),
+
+          // Name
+          h('div',{className:'form-group'},
+            h('label',{className:'form-label'},h('span',{className:'ms ms-xs',style:{marginRight:'4px'}},'badge'),'ชื่อที่แสดง'),
+            h('input',{className:'form-input',value:name,onChange:e=>setName(e.target.value),placeholder:'ชื่อ-นามสกุล'})
+          ),
+
+          // Color picker
+          h('div',{className:'form-group'},
+            h('label',{className:'form-label'},h('span',{className:'ms ms-xs',style:{marginRight:'4px'}},'palette'),'สีประจำตัว'),
+            h('div',{style:{display:'flex',flexWrap:'wrap',gap:'8px',marginTop:'4px'}},
+              AVATAR_COLORS.map(c=>
+                h('div',{key:c,
+                  style:{width:'28px',height:'28px',borderRadius:'50%',background:c,cursor:'pointer',
+                    border: selColor===c ? '3px solid var(--text)' : '3px solid transparent',
+                    boxShadow: selColor===c ? '0 0 0 2px '+c : 'none',
+                    transition:'all 0.1s', flexShrink:0
+                  },
+                  onClick:()=>setSelColor(c)
+                })
+              ),
+              // Custom color
+              h('label',{style:{width:'28px',height:'28px',borderRadius:'50%',cursor:'pointer',overflow:'hidden',border:'2px dashed var(--border2)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0},title:'กำหนดสีเอง'},
+                h('span',{className:'ms',style:{fontSize:'14px',color:'var(--text3)'}},'add'),
+                h('input',{type:'color',value:selColor,onChange:e=>setSelColor(e.target.value),style:{position:'absolute',opacity:0,pointerEvents:'none'}})
+              )
+            )
+          ),
+
+          // Icon picker
+          h('div',{className:'form-group'},
+            h('label',{className:'form-label'},h('span',{className:'ms ms-xs',style:{marginRight:'4px'}},'emoji_emotions'),'ไอคอนประจำตัว'),
+            h('div',{style:{fontSize:'11px',color:'var(--text3)',marginBottom:'8px'}}, 'เลือกไอคอน หรือกดไอคอนที่เลือกอยู่เพื่อยกเลิก'),
+            h('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(38px,1fr))',gap:'4px',maxHeight:'160px',overflowY:'auto',padding:'2px'}},
+              AVATAR_ICONS.map(icon=>
+                h('div',{key:icon,
+                  title:icon,
+                  style:{
+                    width:'36px',height:'36px',borderRadius:'var(--r)',cursor:'pointer',
+                    display:'flex',alignItems:'center',justifyContent:'center',
+                    background: selIcon===icon ? selColor+'22' : 'var(--bg3)',
+                    border: selIcon===icon ? '1px solid '+selColor : '1px solid var(--border)',
+                    color: selIcon===icon ? selColor : 'var(--text2)',
+                    transition:'all 0.1s'
+                  },
+                  onClick:()=>setSelIcon(selIcon===icon ? '' : icon)
+                },
+                  h('span',{className:'ms',style:{fontSize:'18px',lineHeight:'1'}},icon)
+                )
+              )
+            )
+          )
+        ),
+
+        // ── PASSWORD TAB ──
+        tab==='password' && h('div', null,
+          h('div',{style:{display:'flex',alignItems:'center',gap:'12px',padding:'14px 16px',background:'var(--bg3)',borderRadius:'var(--r2)',border:'1px solid var(--border)',marginBottom:'20px'}},
+            h('span',{className:'ms ms-lg',style:{color:'var(--amber)'}},'security'),
+            h('div',null,
+              h('div',{style:{fontWeight:'600',fontSize:'13px'}},'เปลี่ยนรหัสผ่าน'),
+              h('div',{style:{fontSize:'12px',color:'var(--text3)',marginTop:'2px'}},'รหัสผ่านใหม่ต้องมีอย่างน้อย 6 ตัวอักษร')
+            )
+          ),
+          h('div',{className:'form-group'},
+            h('label',{className:'form-label'},h('span',{className:'ms ms-xs',style:{marginRight:'4px'}},'lock'),'รหัสผ่านปัจจุบัน'),
+            h('div',{style:{position:'relative'}},
+              h('input',{className:'form-input',type:showOld?'text':'password',value:oldPass,onChange:e=>{setOldPass(e.target.value);setPassErr('');},placeholder:'รหัสผ่านปัจจุบัน',style:{paddingRight:'40px'}}),
+              h('button',{type:'button',style:{position:'absolute',right:'8px',top:'50%',transform:'translateY(-50%)',background:'none',border:'none',color:'var(--text3)',cursor:'pointer',padding:'4px'},onClick:()=>setShowOld(v=>!v)},
+                h('span',{className:'ms ms-xs'},showOld?'visibility_off':'visibility')
+              )
+            )
+          ),
+          h('div',{className:'form-group'},
+            h('label',{className:'form-label'},h('span',{className:'ms ms-xs',style:{marginRight:'4px'}},'lock_open'),'รหัสผ่านใหม่'),
+            h('div',{style:{position:'relative'}},
+              h('input',{className:'form-input',type:showNew?'text':'password',value:newPass,onChange:e=>{setNewPass(e.target.value);setPassErr('');},placeholder:'รหัสผ่านใหม่ (อย่างน้อย 6 ตัว)',style:{paddingRight:'40px'}}),
+              h('button',{type:'button',style:{position:'absolute',right:'8px',top:'50%',transform:'translateY(-50%)',background:'none',border:'none',color:'var(--text3)',cursor:'pointer',padding:'4px'},onClick:()=>setShowNew(v=>!v)},
+                h('span',{className:'ms ms-xs'},showNew?'visibility_off':'visibility')
+              )
+            ),
+            newPass && strength && h('div',{style:{marginTop:'8px'}},
+              h('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'4px'}},
+                h('span',{style:{fontSize:'11px',color:'var(--text3)'}},'ความแข็งแกร่ง'),
+                h('span',{style:{fontSize:'11px',fontWeight:'600',color:strength.color}},strength.label)
+              ),
+              h('div',{className:'progress-bar'},
+                h('div',{className:'progress-fill',style:{width:strength.pct+'%',background:strength.color}})
+              )
+            )
+          ),
+          h('div',{className:'form-group'},
+            h('label',{className:'form-label'},h('span',{className:'ms ms-xs',style:{marginRight:'4px'}},'check_circle'),'ยืนยันรหัสผ่านใหม่'),
+            h('div',{style:{position:'relative'}},
+              h('input',{className:'form-input',type:showConfirm?'text':'password',value:confirmPass,onChange:e=>{setConfirmPass(e.target.value);setPassErr('');},placeholder:'ยืนยันรหัสผ่านใหม่',
+                style:{paddingRight:'40px', borderColor: confirmPass && newPass && confirmPass===newPass ? 'var(--green)' : confirmPass && newPass && confirmPass!==newPass ? 'var(--red)' : ''},
+                onKeyDown:e=>e.key==='Enter'&&changePassword()
+              }),
+              h('button',{type:'button',style:{position:'absolute',right:'8px',top:'50%',transform:'translateY(-50%)',background:'none',border:'none',color:'var(--text3)',cursor:'pointer',padding:'4px'},onClick:()=>setShowConfirm(v=>!v)},
+                h('span',{className:'ms ms-xs'},showConfirm?'visibility_off':'visibility')
+              ),
+              confirmPass && newPass && h('span',{style:{position:'absolute',right:'36px',top:'50%',transform:'translateY(-50%)'}},
+                h('span',{className:'ms ms-xs',style:{color:confirmPass===newPass?'var(--green)':'var(--red)'}},confirmPass===newPass?'check_circle':'cancel')
+              )
+            )
+          ),
+          passErr && h('div',{style:{display:'flex',alignItems:'center',gap:'6px',background:'var(--red-bg)',border:'1px solid var(--red)',borderRadius:'var(--r)',padding:'8px 12px',marginBottom:'8px',fontSize:'12px',color:'var(--red)'}},
+            h('span',{className:'ms ms-xs'},'error'), passErr
+          )
+        )
+      ),
+
+      h('div', { className:'modal-footer' },
+        h('button',{className:'btn',onClick:onClose},'ปิด'),
+        tab==='profile'
+          ? h('button',{className:'btn btn-primary',onClick:saveProfile,disabled:saving,style:{display:'flex',alignItems:'center',gap:'6px'}},
+              h('span',{className:'ms ms-xs'},saving?'sync':'save'), saving?'กำลังบันทึก...':'บันทึก'
+            )
+          : h('button',{className:'btn btn-primary',onClick:changePassword,style:{display:'flex',alignItems:'center',gap:'6px'}},
+              h('span',{className:'ms ms-xs'},'lock_reset'), 'เปลี่ยนรหัสผ่าน'
+            )
       )
     )
   );
+  return ReactDOM.createPortal(el, document.getElementById('modal-root'));
 }
 
 // ─── SIDEBAR ─────────────────────────────────────────────────────────────────
@@ -1575,8 +1891,8 @@ function Sidebar({ navigate, currentPage, navCtx, isAdmin, teamTCs, teamDefects,
   return h('div', { className: 'sidebar' },
     h('div', { className: 'sidebar-section' },
       h('div', { className: 'sidebar-label' }, 'Main'),
-      h('div', { className:`nav-item${currentPage==='dashboard'?' active':''}`, onClick:()=>nav('dashboard') }, h('div',{className:'nav-dot',style:{background:'var(--accent)'}}), 'Dashboard'),
-      h('div', { className:`nav-item${currentPage==='defects'?' active':''}`, onClick:()=>nav('defects') }, h('div',{className:'nav-dot',style:{background:'var(--red)'}}), 'Defects', openDefects>0&&h('span',{className:'nav-count',style:{background:'var(--red-bg)',color:'var(--red)'}},openDefects)),
+      h('div', { className:`nav-item${currentPage==='dashboard'?' active':''}`, onClick:()=>nav('dashboard') }, h('span',{className:'ms ms-sm',style:{opacity:0.8}},'dashboard'), 'Dashboard'),
+      h('div', { className:`nav-item${currentPage==='defects'?' active':''}`, onClick:()=>nav('defects') }, h('span',{className:'ms ms-sm',style:{opacity:0.8}},'bug_report'), 'Defects', openDefects>0&&h('span',{className:'nav-count',style:{background:'var(--red-bg)',color:'var(--red)'}},openDefects)),
     ),
     h('div', { className: 'sidebar-section', style:{flex:1} },
       h('div', { style:{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 8px',marginBottom:'4px'} },
@@ -1607,7 +1923,7 @@ function Sidebar({ navigate, currentPage, navCtx, isAdmin, teamTCs, teamDefects,
                 h('span', {
                   style:{width:'18px',height:'18px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:'10px',color:'var(--text3)',transition:'transform 0.15s',transform:isExpanded?'rotate(90deg)':'rotate(0deg)'},
                   onClick: e => { e.stopPropagation(); toggleProject(proj.id); }
-                }, '▶'),
+                }, h('span',{className:'ms ms-xs',style:{fontSize:'10px',display:'block'}}, 'chevron_right')),
                 h('span', {
                   style:{flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontWeight:'500'},
                   onClick: () => navigate('project-detail', {projectId:proj.id}),
@@ -1639,7 +1955,7 @@ function Sidebar({ navigate, currentPage, navCtx, isAdmin, teamTCs, teamDefects,
                           h('span', {
                             style:{width:'16px',height:'16px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:'9px',color:'var(--text3)',transition:'transform 0.15s',transform:isTaskExpanded?'rotate(90deg)':'rotate(0deg)'},
                             onClick: e => { e.stopPropagation(); toggleTask(task.id); }
-                          }, taskTCs.length > 0 ? '▶' : '·'),
+                          }, taskTCs.length > 0 ? h('span',{className:'ms ms-xs',style:{fontSize:'10px',display:'block'}},'chevron_right') : h('span',{style:{color:'var(--text3)',fontSize:'10px',display:'block',textAlign:'center'}},'-')),
                           h('span', {
                             style:{flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'},
                             onClick: () => navigate('task-detail', {taskId:task.id, projectId:proj.id}),
@@ -1671,16 +1987,17 @@ function Sidebar({ navigate, currentPage, navCtx, isAdmin, teamTCs, teamDefects,
     ),
     h('div', { className: 'sidebar-section' },
       h('div', { className: 'sidebar-label' }, 'Management'),
-      h('div', { className:`nav-item${currentPage==='projects'?' active':''}`, onClick:()=>nav('projects') }, h('div',{className:'nav-dot',style:{background:'var(--green)'}}), 'All Projects', teamProjects.length>0&&h('span',{className:'nav-count'},teamProjects.length)),
+      h('div', { className:`nav-item${currentPage==='projects'?' active':''}`, onClick:()=>nav('projects') }, h('span',{className:'ms ms-sm',style:{opacity:0.8}},'folder'), 'All Projects', teamProjects.length>0&&h('span',{className:'nav-count'},teamProjects.length)),
       (()=>{ const pc=isAdmin?(pendingMembers||[]).filter(p=>p.teamId===currentTeam?.id&&p.status==='pending').length:0; return h('div', { className:`nav-item${currentPage==='team-settings'?' active':''}`, onClick:()=>nav('team-settings'), style:{display:'flex',alignItems:'center',gap:'8px'} },
-        h('div',{className:'nav-dot',style:{background:'var(--purple)'}}),
+        h('span',{className:'ms ms-sm',style:{opacity:0.8}},'group'),
         'Team Settings',
         pc>0&&h('span',{className:'nav-count',style:{background:'var(--amber-bg)',color:'var(--amber)',border:'1px solid var(--amber)'}},pc)
       ); })(),
-      isAdmin && h('div', { className:`nav-item${currentPage==='activity-log'?' active':''}`, onClick:()=>nav('activity-log') }, h('div',{className:'nav-dot',style:{background:'var(--amber)'}}), 'Activity Log'),
+      isAdmin && h('div', { className:`nav-item${currentPage==='activity-log'?' active':''}`, onClick:()=>nav('activity-log') }, h('span',{className:'ms ms-sm',style:{opacity:0.8}},'history'), 'Activity Log'),
     ),
-    failedTCs > 0 && h('div', { style:{padding:'12px', margin:'8px', background:'var(--red-bg)', border:'1px solid var(--red)', borderRadius:'var(--r)', fontSize:'12px', color:'var(--red)'} },
-      h('strong', null, `${failedTCs} Failed TC`), h('br'), 'ต้องการตรวจสอบ'
+    failedTCs > 0 && h('div', { style:{padding:'12px', margin:'8px', background:'var(--red-bg)', border:'1px solid var(--red)', borderRadius:'var(--r)', fontSize:'12px', color:'var(--red)', display:'flex', alignItems:'flex-start', gap:'8px'} },
+      h('span',{className:'ms ms-sm',style:{flexShrink:0,marginTop:'1px'}},'warning'),
+      h('div',null, h('strong', null, `${failedTCs} Failed TC`), h('br'), 'ต้องการตรวจสอบ')
     )
   );
 }
@@ -1761,7 +2078,7 @@ function DashboardPage({ teamTCs, teamDefects, teamProjects, teamTasks, navigate
         h('h3',{className:'card-title'},'Projects Overview'),
         h('button', { className:'btn btn-sm', onClick:()=>navigate('projects') }, 'ดูทั้งหมด')
       ),
-      teamProjects.length === 0 ? h('div',{className:'empty'},h('div',{className:'empty-icon'},'📋'),h('div',{className:'empty-title'},'ยังไม่มี Project'),h('div',{className:'empty-sub'},'สร้าง Project แรกของคุณ')) :
+      teamProjects.length === 0 ? h('div',{className:'empty'},h('span',{className:'ms ms-xxl',style:{opacity:0.4,display:'block',marginBottom:'14px',color:'var(--text3)'}},'folder_open'),h('div',{className:'empty-title'},'ยังไม่มี Project'),h('div',{className:'empty-sub'},'สร้าง Project แรกของคุณ')) :
       h('div', { style:{display:'flex',flexDirection:'column',gap:'10px'} },
         teamProjects.slice(0,5).map(p => {
           const ptcs = teamTCs.filter(tc => { const t = teamTasks.find(t2=>t2.id===tc.taskId); return t?.projectId===p.id; });
@@ -1930,7 +2247,7 @@ function ProjectDetailPage({ navCtx, projects, tasks, setTasks, testCases, teamT
       ['tasks','dashboard'].map(t=>h('div',{key:t,className:`tab${tab===t?' active':''}`,onClick:()=>setTab(t)},t==='tasks'?'Tasks':'Project Dashboard'))
     ),
     tab==='tasks' && h('div',null,
-      ptasks.length===0?h('div',{className:'empty'},h('div',{className:'empty-icon'},'📋'),h('div',{className:'empty-title'},'ยังไม่มี Task'),canEdit&&h('button',{className:'btn btn-primary',style:{marginTop:'12px'},onClick:openCreate},'+ สร้าง Task')):
+      ptasks.length===0?h('div',{className:'empty'},h('span',{className:'ms ms-xxl',style:{opacity:0.4,display:'block',marginBottom:'14px',color:'var(--text3)'}},'folder_open'),h('div',{className:'empty-title'},'ยังไม่มี Task'),canEdit&&h('button',{className:'btn btn-primary',style:{marginTop:'12px'},onClick:openCreate},'+ สร้าง Task')):
       h('div',{className:'table-wrap'},
         h('table',null,
           h('thead',null,h('tr',null,
@@ -2340,7 +2657,7 @@ function TaskDetailPage({ navCtx, projects, tasks, testCases, setTestCases, defe
                     title:'คัดลอก URL',
                     style:{padding:'3px',fontSize:'13px',opacity:'0.5',flexShrink:0},
                     onClick:(ev)=>{ev.preventDefault();ev.stopPropagation();copyText(shortUrl('tc',tc.id),showToast);}
-                  },'⎘')
+                  },h('span',{className:'ms ms-sm'},'content_copy'))
                 )
               ),
               h('td',null,
@@ -2379,7 +2696,7 @@ function TaskDetailPage({ navCtx, projects, tasks, testCases, setTestCases, defe
               ))):h('span',{style:{color:'var(--text3)',fontSize:'12px'}},'—')),
               h('td',null,h('div',{style:{display:'flex',gap:'4px',flexWrap:'wrap'}},
                 h('button',{className:'btn btn-sm',onClick:()=>{setEditTC(tc);setShowTC(true);}},'ดู/แก้ไข'),
-                canEdit&&h('button',{className:'btn btn-sm',style:{color:'var(--cyan)',borderColor:'var(--cyan)',background:'var(--cyan-bg)'},title:'Clone TC — reset Assignee, Status, Defect',onClick:()=>cloneTC(tc)},'⎘ Clone'),
+                canEdit&&h('button',{className:'btn btn-sm',style:{color:'var(--cyan)',borderColor:'var(--cyan)',background:'var(--cyan-bg)'},title:'Clone TC — reset Assignee, Status, Defect',onClick:()=>cloneTC(tc)},h(React.Fragment,null,h('span',{className:'ms ms-xs',style:{marginRight:'4px'}},'content_copy'),'Clone')),
                 canDelete&&h('button',{className:'btn btn-sm btn-danger',onClick:()=>setDelConfirm(tc)},'ลบ')
               ))
             );
@@ -2412,7 +2729,7 @@ function TaskDetailPage({ navCtx, projects, tasks, testCases, setTestCases, defe
         h('div',{className:'modal modal-sm'},
           h('div',{className:'modal-header'},
             h('span',{className:'modal-title'},'ตั้งชื่อ Test Case ใหม่'),
-            h('button',{className:'modal-close',onClick:()=>setCloneRename(null)},'✕')
+            h('button',{className:'modal-close',onClick:()=>setCloneRename(null)},h('span',{className:'ms ms-sm'},'close'))
           ),
           h('div',{className:'modal-body'},
             h('p',{style:{fontSize:'13px',color:'var(--text2)',marginBottom:'12px'}},'Clone จาก: ',h('strong',{style:{color:'var(--text)'}},cloneRename.tc.title)),
@@ -2582,10 +2899,10 @@ function TCModal({ tc, task, project, testCases, setTestCases, defects, setDefec
 
   const FileList = ({ files, onAdd, onDel }) => h('div',null,
     (files||[]).map(f=>h('div',{key:f.id,className:'file-item'},
-      h('span',{className:'file-icon'},f.type?.startsWith('image/')?'🖼':'📄'),
+      h('span',{className:'file-icon'},f.type?.startsWith('image/') ? h('span',{className:'ms ms-sm'},'image') : h('span',{className:'ms ms-sm'},'description')),
       h('span',{className:'file-name',style:{cursor:'pointer',color:'var(--accent)'},onClick:()=>downloadFile(f)},f.name),
       h('span',{className:'file-size'},Math.round(f.size/1024)+'KB'),
-      canEdit&&h('button',{className:'btn-icon',style:{marginLeft:'auto'},onClick:()=>onDel(f.id)},'✕')
+      canEdit&&h('button',{className:'btn-icon',style:{marginLeft:'auto'},onClick:()=>onDel(f.id)},h('span',{className:'ms ms-sm'},'close'))
     )),
     canEdit&&h('label',{className:'file-drop',style:{marginTop:'6px',padding:'12px',cursor:'pointer'}},
       h('input',{type:'file',multiple:true,accept:'image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx',onChange:onAdd}),
@@ -2599,9 +2916,9 @@ function TCModal({ tc, task, project, testCases, setTestCases, defects, setDefec
         h('span',{className:'modal-title'},isEdit?`แก้ไข: ${tc.title}`:'สร้าง Test Case ใหม่'),
         h('div',{style:{display:'flex',gap:'8px',alignItems:'center'}},
           isEdit&&h('div',{style:{display:'flex',alignItems:'center',gap:'4px'}},
-            h('button',{className:'btn-icon',title:'คัดลอก URL',style:{padding:'5px 7px',fontSize:'15px',opacity:'0.7'},onClick:()=>{copyText(shortUrl('tc',tc.id),showToast);}},'⎘')
+            h('button',{className:'btn-icon',title:'คัดลอก URL',style:{padding:'5px 7px',fontSize:'15px',opacity:'0.7'},onClick:()=>{copyText(shortUrl('tc',tc.id),showToast);}},h('span',{className:'ms ms-sm'},'content_copy'))
           ),
-          h('button',{className:'modal-close',onClick:handleClose},'✕')
+          h('button',{className:'modal-close',onClick:handleClose},h('span',{className:'ms ms-sm'},'close'))
         )
       ),
       h('div',{className:'tabs',style:{padding:'0 24px',margin:'0'}},
@@ -2809,7 +3126,7 @@ function DefectModal({ initialTcId, allTCs, defects, setDefects, currentUser, us
           form.relatedTcIds.map(tcId=>{
             const tc=safeAllTCs.find(x=>x.id===tcId);
             return tc?h('span',{key:tcId,style:{display:'inline-flex',alignItems:'center',gap:'4px',background:'var(--accent-bg)',border:'1px solid var(--accent)',borderRadius:'20px',padding:'3px 10px',fontSize:'12px',color:'var(--accent)'}},
-              tc.title,h('span',{style:{cursor:'pointer',marginLeft:'2px',opacity:0.7},onClick:()=>toggleTC(tcId)},'✕')
+              tc.title,h('span',{style:{cursor:'pointer',marginLeft:'2px',opacity:0.7},onClick:()=>toggleTC(tcId)},h('span',{className:'ms ms-sm'},'close'))
             ):null;
           })
         ),
@@ -2938,7 +3255,7 @@ function DefectsPage({ teamDefects, setDefects, testCases, teamTCs, teamTasks, t
     ),
     filtered.length===0
       ? h('div',{className:'empty'},
-          h('div',{className:'empty-icon'},'🐛'),
+          h('span',{className:'ms ms-xxl',style:{opacity:0.4,display:'block',marginBottom:'14px',color:'var(--text3)'}},'bug_report'),
           h('div',{className:'empty-title'},'ไม่พบ Defect'),
           canEdit&&h('button',{className:'btn btn-primary',style:{marginTop:'12px'},onClick:()=>openDefectModal(null,null,teamTCs)},'+  สร้าง Defect แรก')
         )
@@ -2959,7 +3276,7 @@ function DefectsPage({ teamDefects, setDefects, testCases, teamTCs, teamTasks, t
                     h('div',{style:{fontWeight:'500'}},d.title),
                     d.description&&h('div',{style:{fontSize:'11px',color:'var(--text3)',marginTop:'2px'}},d.description.slice(0,60)+(d.description.length>60?'...':'')),
                     h('div',{style:{display:'flex',alignItems:'center',gap:'4px',marginTop:'4px'}},
-                      h('button',{className:'btn-icon',title:'คัดลอก URL',style:{padding:'2px 4px',fontSize:'12px',opacity:'0.6'},onClick:()=>copyText(shortUrl('def',d.id),showToast)},'⎘')
+                      h('button',{className:'btn-icon',title:'คัดลอก URL',style:{padding:'2px 4px',fontSize:'12px',opacity:'0.6'},onClick:()=>copyText(shortUrl('def',d.id),showToast)},h('span',{className:'ms ms-sm'},'content_copy'))
                     )
                   )
                 ),
@@ -3083,21 +3400,21 @@ function TeamSettingsPage({ currentTeam, currentUser, setTeams, members, setMemb
     tab==='invite'&&h('div',{className:'card'},
       h('div',{className:'card-title',style:{marginBottom:'16px'}},'Invite'),
 
-      h('p',{className:'section-title',style:{marginBottom:'8px'}},'🔗 Invite Link (คลิกเพื่อเข้าร่วมได้ทันที)'),
+      h('p',{className:'section-title',style:{marginBottom:'8px'}},h(React.Fragment,null,h('span',{className:'ms ms-xs',style:{marginRight:'4px'}},'link'),'Invite Link (คลิกเพื่อเข้าร่วมได้ทันที)')),
       h('p',{style:{color:'var(--text2)',fontSize:'13px',marginBottom:'10px'}},'ส่ง Link นี้ให้สมาชิก กดแล้วสมัคร/Login จากนั้นรอ Admin Approve'),
       h('div',{className:'url-box',style:{marginBottom:'6px'}},
         h('span',{className:'url-text',style:{fontSize:'12px',wordBreak:'break-all'}},inviteLink),
-        h('button',{className:'btn-icon',title:'คัดลอก Link',style:{padding:'5px 8px',fontSize:'16px',flexShrink:0},onClick:()=>copyText(inviteLink,showToast)},'⎘')
+        h('button',{className:'btn-icon',title:'คัดลอก Link',style:{padding:'5px 8px',fontSize:'16px',flexShrink:0},onClick:()=>copyText(inviteLink,showToast)},h('span',{className:'ms ms-sm'},'content_copy'))
       ),
       h('p',{style:{fontSize:'11px',color:'var(--text3)',marginBottom:'24px'}},'* Link มี Invite Code ฝังอยู่ เปิดแล้วระบบจะส่งคำขอให้ Admin อนุมัติอัตโนมัติ'),
 
       h('hr',{style:{border:'none',borderTop:'1px solid var(--border)',marginBottom:'20px'}}),
 
-      h('p',{className:'section-title',style:{marginBottom:'8px'}},'🔑 Invite Code (กรอกเองในหน้าเลือกทีม)'),
+      h('p',{className:'section-title',style:{marginBottom:'8px'}},h(React.Fragment,null,h('span',{className:'ms ms-xs',style:{marginRight:'4px'}},'key'),'Invite Code (กรอกเองในหน้าเลือกทีม)')),
       h('p',{style:{color:'var(--text2)',fontSize:'13px',marginBottom:'10px'}},'สำหรับแชร์ Code ให้สมาชิกกรอกเอง'),
       h('div',{className:'url-box'},
         h('span',{className:'url-text',style:{fontFamily:'var(--mono)',fontSize:'15px',letterSpacing:'2px'}},currentTeam.inviteCode),
-        h('button',{className:'btn-icon',title:'คัดลอก Code',style:{padding:'5px 8px',fontSize:'16px'},onClick:()=>copyText(currentTeam.inviteCode,showToast)},'⎘')
+        h('button',{className:'btn-icon',title:'คัดลอก Code',style:{padding:'5px 8px',fontSize:'16px'},onClick:()=>copyText(currentTeam.inviteCode,showToast)},h('span',{className:'ms ms-sm'},'content_copy'))
       )
     ),
 
@@ -3119,7 +3436,7 @@ function PendingApprovalTab({ pendingMembers, currentTeam, users, approvePending
 
   if (reqs.length === 0) return h('div',{className:'card'},
     h('div',{className:'empty'},
-      h('div',{className:'empty-icon'},'✅'),
+      h('span',{className:'ms ms-xxl',style:{opacity:0.4,display:'block',marginBottom:'14px',color:'var(--green)'}},'check_circle'),
       h('div',{className:'empty-title'},'ไม่มีคำขอเข้าร่วมทีม'),
       h('div',{className:'empty-sub'},'ทุกคำขอได้รับการดำเนินการแล้ว')
     )
@@ -3153,8 +3470,8 @@ function PendingApprovalTab({ pendingMembers, currentTeam, users, approvePending
               ['admin','function','edit','view'].map(r=>h('option',{key:r,value:r},r))
             )),
             h('td',null,h('div',{style:{display:'flex',gap:'6px'}},
-              h('button',{className:'btn btn-sm btn-primary',onClick:()=>approvePending(req,selRole)},'✔ Approve'),
-              h('button',{className:'btn btn-sm btn-danger',onClick:()=>rejectPending(req)},'✘ Reject')
+              h('button',{className:'btn btn-sm btn-primary',onClick:()=>approvePending(req,selRole)},h(React.Fragment,null,h('span',{className:'ms ms-sm'},'check'),' Approve')),
+              h('button',{className:'btn btn-sm btn-danger',onClick:()=>rejectPending(req)},h(React.Fragment,null,h('span',{className:'ms ms-sm'},'close'),' Reject'))
             ))
           );
         }))
@@ -3217,7 +3534,7 @@ function ActivityLogPage({ logs, loginLogs, users, isAdmin, members, currentTeam
 function Modal({ title, onClose, children, size='' }) {
   const el = h('div',{className:'modal-overlay',onClick:e=>{if(e.target.className==='modal-overlay')onClose();}},
     h('div',{className:'modal '+(size||'')},
-      h('div',{className:'modal-header'},h('span',{className:'modal-title'},title),h('button',{className:'modal-close',onClick:onClose},'✕')),
+      h('div',{className:'modal-header'},h('span',{className:'modal-title'},title),h('button',{className:'modal-close',onClick:onClose},h('span',{className:'ms ms-sm'},'close'))),
       children
     )
   );
@@ -3228,7 +3545,7 @@ function Modal({ title, onClose, children, size='' }) {
 function ConfirmModal({ title, message, danger, onConfirm, onClose }) {
   const el = h('div',{className:'modal-overlay',style:{zIndex:10000}},
     h('div',{className:'modal modal-sm'},
-      h('div',{className:'modal-header'},h('span',{className:'modal-title'},title),h('button',{className:'modal-close',onClick:onClose},'✕')),
+      h('div',{className:'modal-header'},h('span',{className:'modal-title'},title),h('button',{className:'modal-close',onClick:onClose},h('span',{className:'ms ms-sm'},'close'))),
       h('div',{className:'modal-body'},h('p',{style:{color:'var(--text2)',fontSize:'14px',lineHeight:'1.6'}},message)),
       h('div',{className:'modal-footer'},
         h('button',{className:'btn',onClick:onClose},'ยกเลิก'),
