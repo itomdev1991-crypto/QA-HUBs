@@ -533,7 +533,7 @@ const detectionOpts = ['Positive','Negative'];
 
 // ─── GOOGLE SHEETS CONFIG ─────────────────────────────────────────────────────
 // ใส่ URL ของ Google Apps Script Web App ที่ Deploy แล้ว
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbzz5Ov1Z58rdFxwV8z_AWiBq5q6cWYRqx5G2e7lkd1gls4iezXlWNfKbxUgAxF8VhiH/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbx_CP8dO5QgZI4qfi_QHcrFEsn-pg0uSK-JI9hQ7V56uKRj-EIaiHUGU4sS4EkXjYYJ/exec';
 const SS_ID   = '1x-WEHf1Q1wF_A7E8ngx1Nu7i7oCWZ74Ys3sgqHtW0lk'; // Google Spreadsheet ID
 
 // ─── FIELD ENCRYPTION ────────────────────────────────────────────────────────
@@ -1227,48 +1227,99 @@ function LoginPage({ users, setUsers, loginLogs, setLoginLogs, setCurrentUser, s
   const [resendCooldown, setResendCooldown] = useState(0);
   const [pendingUser, setPendingUser]       = useState(null);
 
-  // ── Reset Password State ──
-  const [showReset, setShowReset] = useState(false);
-  const [resetStep, setResetStep] = useState('email'); // 'email' | 'newpass'
-  const [resetEmail, setResetEmail] = useState('');
-  const [resetErr, setResetErr] = useState('');
-  const [resetNewPass, setResetNewPass] = useState('');
+  // ── Reset Password State ──────────────────────────────────────────────────
+  // Steps: 'email' → 'otp' → 'newpass'
+  const [showReset, setShowReset]           = useState(false);
+  const [resetStep, setResetStep]           = useState('email');
+  const [resetEmail, setResetEmail]         = useState('');
+  const [resetErr, setResetErr]             = useState('');
+  const [resetOtp, setResetOtp]             = useState('');
+  const [resetOtpErr, setResetOtpErr]       = useState('');
+  const [resetOtpLoading, setResetOtpLoading] = useState(false);
+  const [resetEmailLoading, setResetEmailLoading] = useState(false);
+  const [resetResendCooldown, setResetResendCooldown] = useState(0);
+  const [resetNewPass, setResetNewPass]     = useState('');
   const [resetConfirmPass, setResetConfirmPass] = useState('');
-  const [resetShowNew, setResetShowNew] = useState(false);
+  const [resetShowNew, setResetShowNew]     = useState(false);
   const [resetShowConfirm, setResetShowConfirm] = useState(false);
   const [resetFoundUser, setResetFoundUser] = useState(null);
+  const [resetSaving, setResetSaving]       = useState(false);
 
+  const startResetResendTimer = () => {
+    setResetResendCooldown(60);
+    const iv = setInterval(() => {
+      setResetResendCooldown(prev => {
+        if (prev <= 1) { clearInterval(iv); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  // Step 1 — verify email exists then send OTP
   const handleResetEmailCheck = async () => {
     const emailTrim = resetEmail.trim().toLowerCase();
     if (!emailTrim) { setResetErr('กรุณากรอกอีเมล'); return; }
     setResetErr('');
-    // ดึง users ล่าสุดจาก Sheets ก่อนตรวจสอบ
+    setResetEmailLoading(true);
     let freshUsers = users;
     if (GAS_URL) {
       try { freshUsers = await api.getAll('users'); } catch(e) {}
     }
     const found = freshUsers.find(u => String(u.email).trim().toLowerCase() === emailTrim);
-    if (!found) { setResetErr('ไม่พบบัญชีที่ใช้อีเมลนี้'); return; }
+    if (!found) {
+      setResetErr('ไม่พบบัญชีที่ใช้อีเมลนี้');
+      setResetEmailLoading(false);
+      return;
+    }
     setResetFoundUser(found);
-    setResetStep('newpass');
+    // Send OTP
+    try {
+      const res = await api.rawWrite({ action: 'sendVerifyCode', email: emailTrim });
+      if (!res.ok) { setResetErr('ส่งอีเมลไม่สำเร็จ: ' + res.error); setResetEmailLoading(false); return; }
+    } catch(e) {
+      setResetErr('เกิดข้อผิดพลาด: ' + e.message); setResetEmailLoading(false); return;
+    }
+    setResetOtp('');
+    setResetOtpErr('');
+    setResetStep('otp');
+    startResetResendTimer();
+    setResetEmailLoading(false);
   };
 
-  const handleResetConfirm = () => {
+  // Step 2 — verify OTP
+  const handleResetOtpVerify = async () => {
+    const codeTrim = resetOtp.trim();
+    if (codeTrim.length !== 6) { setResetOtpErr('กรุณากรอกรหัส 6 หลัก'); return; }
+    setResetOtpLoading(true);
+    setResetOtpErr('');
+    try {
+      const res = await api.rawWrite({ action: 'verifyCode', email: resetFoundUser.email.trim().toLowerCase(), code: codeTrim });
+      if (!res.ok) { setResetOtpErr(res.error || 'รหัสไม่ถูกต้อง'); setResetOtpLoading(false); return; }
+    } catch(e) {
+      setResetOtpErr('เกิดข้อผิดพลาด: ' + e.message); setResetOtpLoading(false); return;
+    }
+    setResetStep('newpass');
+    setResetNewPass('');
+    setResetConfirmPass('');
+    setResetErr('');
+    setResetOtpLoading(false);
+  };
+
+  // Step 3 — save new password
+  const handleResetConfirm = async () => {
     setResetErr('');
     if (!resetNewPass.trim()) { setResetErr('กรุณากรอกรหัสผ่านใหม่'); return; }
     if (resetNewPass.trim().length < 6) { setResetErr('รหัสผ่านใหม่ต้องมีอย่างน้อย 6 ตัวอักษร'); return; }
     if (resetNewPass.trim() !== resetConfirmPass.trim()) { setResetErr('รหัสผ่านไม่ตรงกัน'); return; }
+    setResetSaving(true);
     const updated = { ...resetFoundUser, password: resetNewPass.trim() };
     setUsers(p => p.map(u => u.id === resetFoundUser.id ? updated : u));
-    showToast('รีเซ็ตรหัสผ่านสำเร็จ กรุณาเข้าสู่ระบบด้วยรหัสใหม่');
-    // ปิด pop-up และ reset state
-    setShowReset(false);
-    setResetStep('email');
-    setResetEmail('');
-    setResetNewPass('');
-    setResetConfirmPass('');
-    setResetFoundUser(null);
-    setResetErr('');
+    if (GAS_URL) {
+      try { await api.update('users', updated); } catch(e) { console.warn('reset save err', e); }
+    }
+    showToast('🔐 รีเซ็ตรหัสผ่านสำเร็จ — กรุณาเข้าสู่ระบบด้วยรหัสใหม่');
+    setResetSaving(false);
+    closeResetModal();
   };
 
   const closeResetModal = () => {
@@ -1278,6 +1329,8 @@ function LoginPage({ users, setUsers, loginLogs, setLoginLogs, setCurrentUser, s
     setResetNewPass('');
     setResetConfirmPass('');
     setResetFoundUser(null);
+    setResetOtp('');
+    setResetOtpErr('');
     setResetErr('');
   };
 
@@ -1483,46 +1536,130 @@ function LoginPage({ users, setUsers, loginLogs, setLoginLogs, setCurrentUser, s
       )
     ),
 
-    // ── RESET PASSWORD MODAL ──
+    // ── RESET PASSWORD MODAL (3 steps: email → otp → newpass) ──
     showReset && h('div', { className:'modal-overlay', style:{zIndex:10001}, onClick:e=>{ if(e.target.className==='modal-overlay') closeResetModal(); } },
-      h('div', { className:'modal modal-sm', style:{maxWidth:'400px',height:'auto'} },
-        h('div', { className:'modal-header' },
-          h('span', { className:'modal-title', style:{display:'flex',alignItems:'center',gap:'8px'} },
-            h('span',{className:'ms ms-sm',style:{color:'var(--amber)'}},'lock_reset'), 'รีเซ็ตรหัสผ่าน'
+      h('div', { className:'modal modal-sm', style:{maxWidth:'420px',height:'auto'} },
+
+        // ── Header with step indicator ──
+        h('div', { className:'modal-header', style:{flexDirection:'column',alignItems:'stretch',gap:'12px',paddingBottom:'14px'} },
+          h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between'}},
+            h('span', { className:'modal-title', style:{display:'flex',alignItems:'center',gap:'8px'} },
+              h('span',{className:'ms ms-sm',style:{color:'var(--amber)'}},'lock_reset'), 'รีเซ็ตรหัสผ่าน'
+            ),
+            h('button', { className:'modal-close', onClick:closeResetModal }, h('span',{className:'ms ms-sm'},'close'))
           ),
-          h('button', { className:'modal-close', onClick:closeResetModal }, h('span',{className:'ms ms-sm'},'close'))
+          h('div',{style:{display:'flex',gap:'0',alignItems:'center',marginTop:'4px'}},
+            ['อีเมล','ยืนยัน OTP','รหัสใหม่'].map((label,i) => {
+              const stepKeys = ['email','otp','newpass'];
+              const curIdx   = stepKeys.indexOf(resetStep);
+              const isDone   = i < curIdx;
+              const isActive = i === curIdx;
+              return h(React.Fragment, {key:i},
+                h('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',gap:'4px',flex:1}},
+                  h('div',{style:{
+                    width:'28px',height:'28px',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',
+                    fontSize:'12px',fontWeight:'700',
+                    background: isDone ? 'var(--green)' : isActive ? 'var(--accent)' : 'var(--bg4)',
+                    color: (isDone||isActive) ? '#fff' : 'var(--text3)',
+                    transition:'all 0.2s'
+                  }},
+                    isDone ? h('span',{className:'ms ms-xs'},'check') : String(i+1)
+                  ),
+                  h('div',{style:{fontSize:'10px',fontWeight: isActive?'600':'400',
+                    color: isActive ? 'var(--accent)' : isDone ? 'var(--green)' : 'var(--text3)'}}, label)
+                ),
+                i < 2 && h('div',{style:{flex:'0 0 28px',height:'2px',borderRadius:'2px',marginBottom:'16px',
+                  background: i < curIdx ? 'var(--green)' : 'var(--bg4)', transition:'background 0.3s'}})
+              );
+            })
+          )
         ),
-        h('div', { className:'modal-body' },
+
+        h('div', { className:'modal-body', style:{padding:'20px 24px'} },
+
+          // ── STEP 1: Email ──────────────────────────────────────────
           resetStep === 'email' && h('div', null,
-            h('p', { style:{color:'var(--text2)',fontSize:'13px',marginBottom:'16px',lineHeight:'1.6'} },
-              'กรอกอีเมลที่ใช้สมัครสมาชิก เพื่อดำเนินการรีเซ็ตรหัสผ่าน'
+            h('div',{style:{textAlign:'center',marginBottom:'20px'}},
+              h('div',{style:{width:'52px',height:'52px',borderRadius:'50%',background:'var(--amber-bg)',border:'2px solid var(--amber)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 10px'}},
+                h('span',{className:'ms',style:{color:'var(--amber)',fontSize:'26px'}},'mail')
+              ),
+              h('div',{style:{fontSize:'13px',color:'var(--text2)',lineHeight:'1.7'}},
+                'กรอกอีเมลที่ใช้ลงทะเบียน',h('br'),'เราจะส่งรหัสยืนยัน OTP ไปยังอีเมลของคุณ'
+              )
             ),
             h('div', { className:'form-group' },
-              h('label', { className:'form-label' }, h('span',{className:'ms ms-xs',style:{marginRight:'4px'}},'email'), 'อีเมล'),
+              h('label', { className:'form-label' }, h('span',{className:'ms ms-xs',style:{marginRight:'4px'}},'alternate_email'), 'อีเมล'),
               h('input', { className:'form-input', type:'email', value:resetEmail, placeholder:'email@example.com',
                 onChange:e=>{ setResetEmail(e.target.value); setResetErr(''); },
                 onKeyDown:e=>e.key==='Enter'&&handleResetEmailCheck(), autoFocus:true
               })
             ),
-            resetErr && h('div', { style:{display:'flex',alignItems:'center',gap:'6px',background:'var(--red-bg)',border:'1px solid var(--red)',borderRadius:'var(--r)',padding:'8px 12px',fontSize:'12px',color:'var(--red)'} },
+            resetErr && h('div',{style:{display:'flex',alignItems:'center',gap:'6px',background:'var(--red-bg)',border:'1px solid var(--red)',borderRadius:'var(--r)',padding:'8px 12px',fontSize:'12px',color:'var(--red)'}},
               h('span',{className:'ms ms-xs'},'error'), resetErr
             )
           ),
+
+          // ── STEP 2: OTP ────────────────────────────────────────────
+          resetStep === 'otp' && h('div', null,
+            h('div',{style:{textAlign:'center',marginBottom:'20px'}},
+              h('div',{style:{width:'52px',height:'52px',borderRadius:'50%',background:'var(--accent-bg)',border:'2px solid var(--accent)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 10px'}},
+                h('span',{className:'ms',style:{color:'var(--accent)',fontSize:'26px'}},'mark_email_unread')
+              ),
+              h('div',{style:{fontWeight:'600',fontSize:'14px',marginBottom:'6px'}},'ตรวจสอบอีเมลของคุณ'),
+              h('div',{style:{fontSize:'13px',color:'var(--text2)',lineHeight:'1.7'}},
+                'เราส่งรหัส 6 หลักไปยัง', h('br'),
+                h('strong',{style:{color:'var(--accent)'}},' '+resetFoundUser?.email),
+                h('br'),
+                h('span',{style:{fontSize:'12px',color:'var(--text3)'}},'รหัสจะหมดอายุใน 10 นาที')
+              )
+            ),
+            h('div',{className:'form-group'},
+              h('label',{className:'form-label',style:{textAlign:'center',display:'block'}},'รหัส OTP'),
+              h('input',{
+                className:'form-input', type:'text', inputMode:'numeric', maxLength:6,
+                value:resetOtp,
+                onChange:e=>{ setResetOtp(e.target.value.replace(/\D/g,'')); setResetOtpErr(''); },
+                onKeyDown:e=>e.key==='Enter'&&handleResetOtpVerify(),
+                placeholder:'000000', autoFocus:true,
+                style:{textAlign:'center',fontSize:'26px',fontFamily:'var(--mono)',letterSpacing:'10px',fontWeight:'700',padding:'12px'}
+              })
+            ),
+            resetOtpErr && h('div',{style:{display:'flex',alignItems:'center',gap:'6px',background:'var(--red-bg)',border:'1px solid var(--red)',borderRadius:'var(--r)',padding:'8px 12px',fontSize:'12px',color:'var(--red)',marginBottom:'8px'}},
+              h('span',{className:'ms ms-xs'},'error'), resetOtpErr
+            ),
+            h('div',{style:{textAlign:'center',fontSize:'13px',color:'var(--text2)'}},
+              'ไม่ได้รับรหัส? ',
+              resetResendCooldown > 0
+                ? h('span',{style:{color:'var(--text3)'}},'ส่งอีกครั้งใน '+resetResendCooldown+'วิ')
+                : h('span',{className:'link',style:{color:'var(--accent)',cursor:'pointer'},
+                    onClick:async()=>{
+                      setResetOtpErr('');
+                      try {
+                        const res = await api.rawWrite({ action:'sendVerifyCode', email:resetFoundUser.email.trim().toLowerCase() });
+                        if (res.ok) startResetResendTimer();
+                        else setResetOtpErr('ส่งอีกครั้งไม่สำเร็จ: '+res.error);
+                      } catch(ex){ setResetOtpErr(ex.message); }
+                    }
+                  },'ส่งรหัสอีกครั้ง')
+            )
+          ),
+
+          // ── STEP 3: New Password ───────────────────────────────────
           resetStep === 'newpass' && h('div', null,
-            h('div', { style:{display:'flex',alignItems:'center',gap:'10px',padding:'12px 14px',background:'var(--green-bg)',border:'1px solid var(--green)',borderRadius:'var(--r2)',marginBottom:'16px'} },
-              h('span',{className:'ms ms-sm',style:{color:'var(--green)'}},'check_circle'),
+            h('div',{style:{display:'flex',alignItems:'center',gap:'10px',padding:'10px 14px',background:'var(--green-bg)',border:'1px solid var(--green)',borderRadius:'var(--r2)',marginBottom:'16px'}},
+              h('span',{className:'ms ms-sm',style:{color:'var(--green)'}},'verified_user'),
               h('div',null,
-                h('div',{style:{fontWeight:'600',fontSize:'13px',color:'var(--green)'}},'พบบัญชีแล้ว'),
-                h('div',{style:{fontSize:'12px',color:'var(--text2)',marginTop:'2px'}}, resetFoundUser?.name || resetEmail)
+                h('div',{style:{fontWeight:'600',fontSize:'13px',color:'var(--green)'}},'ยืนยันตัวตนสำเร็จ'),
+                h('div',{style:{fontSize:'12px',color:'var(--text2)',marginTop:'2px'}}, resetFoundUser?.name||resetFoundUser?.email)
               )
             ),
             h('div', { className:'form-group' },
               h('label', { className:'form-label' }, h('span',{className:'ms ms-xs',style:{marginRight:'4px'}},'lock_open'), 'รหัสผ่านใหม่'),
               h('div', { style:{position:'relative'} },
-                h('input', { className:'form-input', type:resetShowNew?'text':'password', value:resetNewPass, placeholder:'รหัสผ่านใหม่ (อย่างน้อย 6 ตัว)',
-                  style:{paddingRight:'40px'},
+                h('input', { className:'form-input', type:resetShowNew?'text':'password', value:resetNewPass,
+                  placeholder:'รหัสผ่านใหม่ (อย่างน้อย 6 ตัว)', style:{paddingRight:'40px'},
                   onChange:e=>{ setResetNewPass(e.target.value); setResetErr(''); },
-                  autoFocus:true
+                  onKeyDown:e=>e.key==='Enter'&&handleResetConfirm(), autoFocus:true
                 }),
                 h('button',{type:'button',style:{position:'absolute',right:'8px',top:'50%',transform:'translateY(-50%)',background:'none',border:'none',color:'var(--text3)',cursor:'pointer',padding:'4px'},
                   onClick:()=>setResetShowNew(v=>!v)},
@@ -1533,8 +1670,10 @@ function LoginPage({ users, setUsers, loginLogs, setLoginLogs, setCurrentUser, s
             h('div', { className:'form-group' },
               h('label', { className:'form-label' }, h('span',{className:'ms ms-xs',style:{marginRight:'4px'}},'check_circle'), 'ยืนยันรหัสผ่านใหม่'),
               h('div', { style:{position:'relative'} },
-                h('input', { className:'form-input', type:resetShowConfirm?'text':'password', value:resetConfirmPass, placeholder:'ยืนยันรหัสผ่านใหม่',
-                  style:{paddingRight:'40px', borderColor: resetConfirmPass && resetNewPass && resetConfirmPass===resetNewPass ? 'var(--green)' : resetConfirmPass && resetNewPass && resetConfirmPass!==resetNewPass ? 'var(--red)' : ''},
+                h('input', { className:'form-input', type:resetShowConfirm?'text':'password', value:resetConfirmPass,
+                  placeholder:'ยืนยันรหัสผ่านใหม่',
+                  style:{paddingRight:'40px',
+                    borderColor:resetConfirmPass&&resetNewPass?(resetConfirmPass===resetNewPass?'var(--green)':'var(--red)'):''},
                   onChange:e=>{ setResetConfirmPass(e.target.value); setResetErr(''); },
                   onKeyDown:e=>e.key==='Enter'&&handleResetConfirm()
                 }),
@@ -1542,30 +1681,52 @@ function LoginPage({ users, setUsers, loginLogs, setLoginLogs, setCurrentUser, s
                   onClick:()=>setResetShowConfirm(v=>!v)},
                   h('span',{className:'ms ms-xs'},resetShowConfirm?'visibility_off':'visibility')
                 ),
-                resetConfirmPass && resetNewPass && h('span',{style:{position:'absolute',right:'36px',top:'50%',transform:'translateY(-50%)'}},
-                  h('span',{className:'ms ms-xs',style:{color:resetConfirmPass===resetNewPass?'var(--green)':'var(--red)'}},resetConfirmPass===resetNewPass?'check_circle':'cancel')
+                resetConfirmPass&&resetNewPass&&h('span',{style:{position:'absolute',right:'36px',top:'50%',transform:'translateY(-50%)'}},
+                  h('span',{className:'ms ms-xs',style:{color:resetConfirmPass===resetNewPass?'var(--green)':'var(--red)'}},
+                    resetConfirmPass===resetNewPass?'check_circle':'cancel')
                 )
               )
             ),
-            resetErr && h('div', { style:{display:'flex',alignItems:'center',gap:'6px',background:'var(--red-bg)',border:'1px solid var(--red)',borderRadius:'var(--r)',padding:'8px 12px',fontSize:'12px',color:'var(--red)'} },
+            resetErr && h('div',{style:{display:'flex',alignItems:'center',gap:'6px',background:'var(--red-bg)',border:'1px solid var(--red)',borderRadius:'var(--r)',padding:'8px 12px',fontSize:'12px',color:'var(--red)'}},
               h('span',{className:'ms ms-xs'},'error'), resetErr
             )
           )
         ),
+
+        // ── Footer ──────────────────────────────────────────────────
         h('div', { className:'modal-footer' },
           h('button', { className:'btn', onClick:closeResetModal }, 'ยกเลิก'),
-          resetStep === 'email'
-            ? h('button', { className:'btn btn-primary', onClick:handleResetEmailCheck, style:{display:'flex',alignItems:'center',gap:'6px'} },
-                h('span',{className:'ms ms-xs'},'arrow_forward'), 'ถัดไป'
-              )
-            : h('button', { className:'btn btn-primary', onClick:handleResetConfirm, style:{display:'flex',alignItems:'center',gap:'6px'} },
-                h('span',{className:'ms ms-xs'},'lock_reset'), 'ยืนยัน'
-              )
+          resetStep === 'email' && h('button',{
+            className:'btn btn-primary', onClick:handleResetEmailCheck, disabled:resetEmailLoading,
+            style:{display:'flex',alignItems:'center',gap:'6px'}
+          },
+            resetEmailLoading
+              ? h(React.Fragment,null,h('span',{className:'ms ms-xs',style:{animation:'spin 1s linear infinite'}},'autorenew'),' กำลังส่ง...')
+              : h(React.Fragment,null,h('span',{className:'ms ms-xs'},'send'),' ส่งรหัส OTP')
+          ),
+          resetStep === 'otp' && h('button',{
+            className:'btn btn-primary', onClick:handleResetOtpVerify,
+            disabled:resetOtpLoading||resetOtp.length!==6,
+            style:{display:'flex',alignItems:'center',gap:'6px'}
+          },
+            resetOtpLoading
+              ? h(React.Fragment,null,h('span',{className:'ms ms-xs',style:{animation:'spin 1s linear infinite'}},'autorenew'),' กำลังตรวจสอบ...')
+              : h(React.Fragment,null,h('span',{className:'ms ms-xs'},'verified'),' ยืนยัน OTP')
+          ),
+          resetStep === 'newpass' && h('button',{
+            className:'btn btn-primary', onClick:handleResetConfirm, disabled:resetSaving,
+            style:{display:'flex',alignItems:'center',gap:'6px'}
+          },
+            resetSaving
+              ? h(React.Fragment,null,h('span',{className:'ms ms-xs',style:{animation:'spin 1s linear infinite'}},'autorenew'),' กำลังบันทึก...')
+              : h(React.Fragment,null,h('span',{className:'ms ms-xs'},'lock_reset'),' บันทึกรหัสผ่านใหม่')
+          )
         )
       )
     )
   );
 }
+
 
 // ─── INVITE WAITING PAGE ──────────────────────────────────────────────────────
 function InviteWaitingPage({ teamName, teamId, currentUser, pendingMembers, setPendingMembers, members, teams, setCurrentTeam, setPage, setInviteWaitingTeam, refreshFromSheets, USE_GAS }) {
