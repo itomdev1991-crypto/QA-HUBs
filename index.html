@@ -600,7 +600,7 @@ const detectionOpts = ['Positive','Negative'];
 
 // ─── GOOGLE SHEETS CONFIG ─────────────────────────────────────────────────────
 // ใส่ URL ของ Google Apps Script Web App ที่ Deploy แล้ว
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbxvGEsgHikcKDYqs0J6UFlA19E40-REzKadLE-lYeVudc4sr5P_6IhEbew708vujcjd/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbyVpyur3o-xUl-HUzypXPPAqlXDArEENm9M4XxRCk9SVgspuJ_8C97uo-rE8hDjZ_u9/exec';
 const SS_ID   = '1x-WEHf1Q1wF_A7E8ngx1Nu7i7oCWZ74Ys3sgqHtW0lk'; // Google Spreadsheet ID
 
 // ─── FIELD ENCRYPTION ────────────────────────────────────────────────────────
@@ -3068,6 +3068,8 @@ function TaskDetailPage({ navCtx, projects, tasks, testCases, setTestCases, defe
   const [selected, setSelected] = useState([]);
   const [delConfirm, setDelConfirm] = useState(null);
   const [cloneRename, setCloneRename] = useState(null); // {tc, pendingTitle}
+  const [tcCommentPending, setTcCommentPending] = useState(null); // {tc, newStatus}
+  const [tcCommentInput, setTcCommentInput] = useState('');
 
   if (!task || !project) return h('div',{className:'empty'},'ไม่พบ Task');
   
@@ -3368,8 +3370,14 @@ function TaskDetailPage({ navCtx, projects, tasks, testCases, setTestCases, defe
         ),
         h('div',{style:{display:'flex',alignItems:'center',gap:'6px'}},
           h('span',{style:{fontSize:'12px',color:'var(--text3)'}},'Status:'),
-          h('select',{className:'form-select',style:{width:'130px',padding:'4px 8px',fontSize:'12px'},onChange:e=>{if(!e.target.value)return;const v=e.target.value;setTestCases(p=>p.map(x=>selected.includes(x.id)?{...x,status:v,updatedAt:now()}:x));addLog('Bulk Update','แก้ไข Status '+selected.length+' TCs → '+v);showToast(`อัพเดท Status ${selected.length} รายการ`);e.target.value='';},defaultValue:''},
-            h('option',{value:''},'เลือก...'),statusOpts.map(s=>h('option',{key:s,value:s},s))
+          h('select',{className:'form-select',style:{width:'130px',padding:'4px 8px',fontSize:'12px'},onChange:e=>{if(!e.target.value)return;const v=e.target.value;
+            if(['Pass with Comment','Cancelled','Deferred'].includes(v)){
+              setTcCommentPending({tc:{id:'__bulk__',title:`${selected.length} Test Cases ที่เลือก`,_bulkIds:selected},newStatus:v});
+            } else {
+              setTestCases(p=>p.map(x=>selected.includes(x.id)?{...x,status:v,updatedAt:now()}:x));addLog('Bulk Update','แก้ไข Status '+selected.length+' TCs → '+v);showToast(`อัพเดท Status ${selected.length} รายการ`);
+            }
+            e.target.value='';},defaultValue:''},
+            [h('option',{key:'',value:''},'เลือก...'),...statusOpts.map(s=>h('option',{key:s,value:s},s))]
           )
         ),
         h('button',{className:'btn btn-sm',style:{marginLeft:'auto'},onClick:()=>setSelected([])},'ล้างการเลือก')
@@ -3435,7 +3443,17 @@ function TaskDetailPage({ navCtx, projects, tasks, testCases, setTestCases, defe
                 className:'form-select',
                 style:{width:'120px',padding:'3px 6px',fontSize:'12px',background:'var(--bg3)'},
                 value:tc.status,
-                onChange:e=>{e.stopPropagation();setTestCases(p=>p.map(x=>x.id===tc.id?{...x,status:e.target.value,updatedAt:now()}:x));addLog('Update TC',`แก้ไข Status: ${tc.title} → ${e.target.value}`);showToast('อัพเดทแล้ว');}
+                onChange:e=>{
+                  e.stopPropagation();
+                  const v=e.target.value;
+                  if(['Pass with Comment','Cancelled','Deferred'].includes(v)){
+                    setTcCommentPending({tc,newStatus:v});
+                  } else {
+                    setTestCases(p=>p.map(x=>x.id===tc.id?{...x,status:v,updatedAt:now()}:x));
+                    addLog('Update TC',`แก้ไข Status: ${tc.title} → ${v}`);
+                    showToast('อัพเดทแล้ว');
+                  }
+                }
               },statusOpts.map(s=>h('option',{key:s,value:s},s)))),
               h('td',null,h('span',{style:{color:'var(--text2)',fontSize:'12px'}},(tc.steps||[]).length+' steps')),
               h('td',null,tcDefs.length>0?h('div',{style:{display:'flex',flexDirection:'column',gap:'4px'}},tcDefs.map(d=>h('div',{key:d.id,style:{display:'flex',alignItems:'center',gap:'4px',flexWrap:'wrap'}},
@@ -3472,6 +3490,57 @@ function TaskDetailPage({ navCtx, projects, tasks, testCases, setTestCases, defe
       )
     ),
     showTC&&h(TCModal,{tc:editTC,task,project,testCases,setTestCases,defects,setDefects,currentUser,users,canEdit,showToast,addLog,onClose:()=>setShowTC(false),navigate,openDefectModal}),
+    tcCommentPending&&ReactDOM.createPortal(
+      h('div',{className:'modal-overlay',style:{zIndex:10001},onClick:e=>{if(e.target.className==='modal-overlay'){setTcCommentPending(null);setTcCommentInput('');}}},
+        h('div',{className:'modal modal-sm'},
+          h('div',{className:'modal-header'},
+            h('span',{className:'modal-title',style:{display:'flex',alignItems:'center',gap:'8px'}},
+              h('span',{className:'ms ms-sm',style:{color:'var(--amber)'}},'comment'),
+              'บังคับ Comment — '+tcCommentPending.newStatus
+            ),
+            h('button',{className:'modal-close',onClick:()=>{setTcCommentPending(null);setTcCommentInput('');}},h('span',{className:'ms ms-sm'},'close'))
+          ),
+          h('div',{className:'modal-body'},
+            h('p',{style:{fontSize:'13px',color:'var(--text2)',marginBottom:'12px'}},
+              'TC: ',h('strong',{style:{color:'var(--text)'}},tcCommentPending.tc.title)
+            ),
+            h('div',{className:'form-group',style:{marginBottom:0}},
+              h('label',{className:'form-label'},'Comment ',h('span',{className:'req'},'*')),
+              h('textarea',{
+                className:'form-textarea',autoFocus:true,value:tcCommentInput,
+                onChange:e=>setTcCommentInput(e.target.value),
+                placeholder:'กรุณาใส่ Comment สำหรับสถานะนี้...',
+                style:{minHeight:'100px'}
+              })
+            )
+          ),
+          h('div',{className:'modal-footer'},
+            h('button',{className:'btn',onClick:()=>{setTcCommentPending(null);setTcCommentInput('');}}, 'ยกเลิก'),
+            h('button',{
+              className:'btn btn-primary',
+              disabled:!tcCommentInput.trim(),
+              onClick:()=>{
+                if(!tcCommentInput.trim()){showToast('กรุณาใส่ Comment','error');return;}
+                const {tc,newStatus}=tcCommentPending;
+                if(tc.id==='__bulk__'){
+                  const bulkIds=tc._bulkIds||[];
+                  setTestCases(p=>p.map(x=>bulkIds.includes(x.id)?{...x,status:newStatus,comment:tcCommentInput,updatedAt:now()}:x));
+                  addLog('Bulk Update','แก้ไข Status '+bulkIds.length+' TCs → '+newStatus);
+                  showToast(`อัพเดท Status ${bulkIds.length} รายการ`);
+                } else {
+                  setTestCases(p=>p.map(x=>x.id===tc.id?{...x,status:newStatus,comment:tcCommentInput,updatedAt:now()}:x));
+                  addLog('Update TC','แก้ไข Status: '+tc.title+' → '+newStatus);
+                  showToast('อัพเดทแล้ว');
+                }
+                setTcCommentPending(null);
+                setTcCommentInput('');
+              }
+            },'✓ บันทึก')
+          )
+        )
+      ),
+      document.getElementById('modal-root')
+    ),
     cloneRename&&ReactDOM.createPortal(
       h('div',{className:'modal-overlay',style:{zIndex:10000},onClick:e=>{if(e.target.className==='modal-overlay')setCloneRename(null);}},
         h('div',{className:'modal modal-sm'},
@@ -3593,6 +3662,8 @@ function TCModal({ tc, task, project, testCases, setTestCases, defects, setDefec
   const [dirty, setDirty] = useState(false);
   const [showConfirm, setShowConfirm] = useState(null);
   const [activeTab, setActiveTab] = useState('info');
+  const [commentError, setCommentError] = useState(false);
+  const commentRef = useRef(null);
 
   const set = (k,v) => { setForm(p=>({...p,[k]:v})); setDirty(true); };
   const setStep = (i,k,v) => { const steps=[...form.steps]; steps[i]={...steps[i],[k]:v}; setForm(p=>({...p,steps})); setDirty(true); };
@@ -3634,7 +3705,14 @@ function TCModal({ tc, task, project, testCases, setTestCases, defects, setDefec
 
   const save = () => {
     if (!form.title.trim()) { showToast('กรุณาใส่ Title','error'); return; }
-    if (form.status==='Pass with Comment' && !form.comment.trim()) { showToast('Pass with Comment ต้องใส่ Comment','error'); return; }
+    if (['Pass with Comment','Cancelled','Deferred'].includes(form.status) && !form.comment.trim()) {
+      setCommentError(true);
+      setActiveTab('info');
+      showToast(form.status+' ต้องใส่ Comment ก่อนบันทึก','error');
+      setTimeout(()=>{ if(commentRef.current){ commentRef.current.scrollIntoView({behavior:'smooth',block:'center'}); commentRef.current.focus(); } },100);
+      return;
+    }
+    setCommentError(false);
     if (isEdit) {
       const old = testCases.find(x=>x.id===tc.id);
       const changes = [];
@@ -3697,7 +3775,7 @@ function TCModal({ tc, task, project, testCases, setTestCases, defects, setDefec
           ),
           h('div',{className:'form-row3'},
             h('div',{className:'form-group'},h('label',{className:'form-label'},'Detection'),h('select',{className:'form-select',value:form.detection,onChange:e=>set('detection',e.target.value),disabled:!canEdit},detectionOpts.map(o=>h('option',{key:o,value:o},o)))),
-            h('div',{className:'form-group'},h('label',{className:'form-label'},'Status'),h('select',{className:'form-select',value:form.status,onChange:e=>set('status',e.target.value),disabled:!canEdit},statusOpts.map(o=>h('option',{key:o,value:o},o)))),
+            h('div',{className:'form-group'},h('label',{className:'form-label'},'Status'),h('select',{className:'form-select',value:form.status,onChange:e=>{ set('status',e.target.value); setCommentError(false); },disabled:!canEdit},statusOpts.map(o=>h('option',{key:o,value:o},o)))),
             h('div',{className:'form-group'},h('label',{className:'form-label'},'Test Data'),h('input',{className:'form-input',value:form.testData,onChange:e=>set('testData',e.target.value),readOnly:!canEdit}))
           ),
           h('div',{className:'form-row'},
@@ -3717,9 +3795,16 @@ function TCModal({ tc, task, project, testCases, setTestCases, defects, setDefec
               )
             )
           ),
-          form.status==='Pass with Comment'&&h('div',{className:'form-group'},
-            h('label',{className:'form-label'},'Comment ',h('span',{className:'req'},'*')),
-            h('textarea',{className:'form-textarea',value:form.comment,onChange:e=>set('comment',e.target.value),placeholder:'กรุณาใส่ Comment...',readOnly:!canEdit})
+          ['Pass with Comment','Cancelled','Deferred'].includes(form.status)&&h('div',{className:'form-group'},
+            h('label',{className:'form-label',style:commentError?{color:'var(--red)'}:{}},'Comment ',h('span',{className:'req'},'*'),
+              commentError&&h('span',{style:{fontSize:'11px',color:'var(--red)',marginLeft:'8px',fontWeight:'400'}},'⚠ กรุณาใส่ Comment ก่อนบันทึก')
+            ),
+            h('textarea',{ref:commentRef,className:'form-textarea',value:form.comment,
+              onChange:e=>{ set('comment',e.target.value); if(e.target.value.trim()) setCommentError(false); },
+              placeholder:form.status==='Cancelled'?'กรุณาระบุเหตุผลที่ยกเลิก...':form.status==='Deferred'?'กรุณาระบุเหตุผลที่เลื่อน...':'กรุณาใส่ Comment...',
+              readOnly:!canEdit,
+              style:commentError?{border:'2px solid var(--red)',background:'var(--red-bg)',boxShadow:'0 0 0 3px rgba(229,9,20,0.15)'}:{}
+            })
           ),
           form.status==='Failed'&&h('div',{className:'confirm-box',style:{marginBottom:'12px'}},
             h('p',{style:{color:'var(--amber)',fontSize:'12px',fontWeight:'500'}},'TC นี้ Failed — โปรดผูก Defect ในแท็บ Defects')
@@ -3822,18 +3907,28 @@ function DefectModal({ initialTcId, allTCs, defects, setDefects, currentUser, us
         description: editDefect.description || '',
         targetDate: editDefect.targetDate || '',
         assignee: editDefect.assignee || '',
+        comment: editDefect.comment || '',
         relatedTcIds: Array.isArray(editDefect.relatedTcIds) ? editDefect.relatedTcIds : (editDefect.testCaseId ? [editDefect.testCaseId] : [])
       };
     }
-    return { title:'', severity:'Medium', status:'Open', description:'', targetDate:'', assignee:'', relatedTcIds: initialTcId ? [initialTcId] : [] };
+    return { title:'', severity:'Medium', status:'Open', description:'', targetDate:'', assignee:'', comment:'', relatedTcIds: initialTcId ? [initialTcId] : [] };
   };
   const [form, setForm] = useState(initForm);
   const [tcSearch, setTcSearch] = useState('');
+  const [commentError, setCommentError] = useState(false);
+  const commentRef = useRef(null);
 
   const toggleTC = (tcId) => setForm(p=>({...p, relatedTcIds:p.relatedTcIds.includes(tcId)?p.relatedTcIds.filter(x=>x!==tcId):[...p.relatedTcIds,tcId]}));
 
   const save = () => {
     if (!form.title.trim()) { showToast('กรุณาใส่ชื่อ Defect','error'); return; }
+    if (['Re-Open','Rejected'].includes(form.status) && !(form.comment||'').trim()) {
+      setCommentError(true);
+      showToast(form.status+' ต้องใส่ Comment ก่อนบันทึก','error');
+      setTimeout(()=>{ if(commentRef.current){ commentRef.current.scrollIntoView({behavior:'smooth',block:'center'}); commentRef.current.focus(); } },100);
+      return;
+    }
+    setCommentError(false);
     if (isEdit) {
       setDefects(p=>p.map(x=>x.id===editDefect.id?{...x,...form,updatedAt:now()}:x));
       addLog('Update Defect','แก้ไข Defect: '+form.title);
@@ -3856,8 +3951,25 @@ function DefectModal({ initialTcId, allTCs, defects, setDefects, currentUser, us
         h('div',{className:'form-group'},h('label',{className:'form-label'},'Severity'),h('select',{className:'form-select',value:form.severity,onChange:e=>setForm(p=>({...p,severity:e.target.value}))},['Critical','High','Medium','Low'].map(o=>h('option',{key:o,value:o},o))))
       ),
       h('div',{className:'form-row'},
-        h('div',{className:'form-group'},h('label',{className:'form-label'},'Status'),h('select',{className:'form-select',value:form.status,onChange:e=>setForm(p=>({...p,status:e.target.value}))},['Open','Investigate','Ready to Test','Fixed','Re-Open','Closed','Rejected'].map(o=>h('option',{key:o,value:o},o)))),
+        h('div',{className:'form-group'},h('label',{className:'form-label'},'Status'),h('select',{className:'form-select',value:form.status,onChange:e=>{
+          const newStatus = e.target.value;
+          const needsComment = ['Re-Open','Rejected'].includes(newStatus);
+          const hadComment = ['Re-Open','Rejected'].includes(form.status);
+          setForm(p=>({...p, status:newStatus, comment: needsComment && !hadComment ? '' : p.comment}));
+          setCommentError(false);
+        }},['Open','Investigate','Ready to Test','Fixed','Re-Open','Closed','Rejected'].map(o=>h('option',{key:o,value:o},o)))),
         h('div',{className:'form-group'},h('label',{className:'form-label'},'Target Date'),h('input',{type:'date',className:'form-input',value:form.targetDate,onChange:e=>setForm(p=>({...p,targetDate:e.target.value}))}))
+      ),
+      ['Re-Open','Rejected'].includes(form.status)&&h('div',{className:'form-group'},
+        h('label',{className:'form-label',style:commentError?{color:'var(--red)'}:{}},'Comment ',h('span',{className:'req'},'*'),
+          commentError&&h('span',{style:{fontSize:'11px',color:'var(--red)',marginLeft:'8px',fontWeight:'400'}},'⚠ กรุณาใส่ Comment ก่อนบันทึก')
+        ),
+        h('textarea',{ref:commentRef,className:'form-textarea',value:form.comment||'',
+          onChange:e=>{ setForm(p=>({...p,comment:e.target.value})); if(e.target.value.trim()) setCommentError(false); },
+          placeholder:form.status==='Re-Open'?'กรุณาระบุเหตุผลที่ Re-Open...':'กรุณาระบุเหตุผลที่ Reject...',
+          autoFocus:true,
+          style:commentError?{border:'2px solid var(--red)',background:'var(--red-bg)',boxShadow:'0 0 0 3px rgba(229,9,20,0.15)'}:{}
+        })
       ),
       h('div',{className:'form-row'},
         h('div',{className:'form-group'},
@@ -3954,6 +4066,8 @@ function DefectsPage({ teamDefects, setDefects, testCases, teamTCs, teamTasks, t
   const [filterSev, setFilterSev] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [selected, setSelected] = useState([]);
+  const [defCommentPending, setDefCommentPending] = useState(null); // {defect, newStatus}
+  const [defCommentInput, setDefCommentInput] = useState('');
 
   const filtered = teamDefects.filter(d =>
     (!search || d.title.toLowerCase().includes(search.toLowerCase()) || (d.defectId||'').toLowerCase().includes(search.toLowerCase())) &&
@@ -3978,7 +4092,15 @@ function DefectsPage({ teamDefects, setDefects, testCases, teamTCs, teamTasks, t
     showToast('Export Defects สำเร็จ');
   };
 
-  const updateStatus = (id, status) => { setDefects(p=>p.map(x=>x.id===id?{...x,status,updatedAt:now()}:x)); addLog('Update Defect','เปลี่ยน Status: '+status); };
+  const updateStatus = (defect, status) => {
+    if(['Re-Open','Rejected'].includes(status)){
+      setDefCommentPending({defect,newStatus:status});
+    } else {
+      setDefects(p=>p.map(x=>x.id===defect.id?{...x,status,updatedAt:now()}:x));
+      addLog('Update Defect','เปลี่ยน Status: '+status);
+      showToast('อัพเดทแล้ว');
+    }
+  };
   const deleteDefect = (id) => { setDefects(p=>p.filter(x=>x.id!==id)); showToast('ลบ Defect สำเร็จ'); };
   const cloneDefect = (d) => {
     const cloned = {...d, id:uid(), defectId:'DEF-'+uid().slice(0,5).toUpperCase(), createdAt:now(), createdBy:currentUser.id, relatedTcIds:[], testCaseId:null, title:'[Clone] '+d.title};
@@ -4049,7 +4171,7 @@ function DefectsPage({ teamDefects, setDefects, testCases, teamTCs, teamTasks, t
                   })()
                 ),
                 h('td',null,h('span',{className:'badge '+(DEF_SEVERITY_COLORS[d.severity]||'badge-gray')},d.severity)),
-                h('td',null,h('select',{className:'form-select',style:{width:'140px',padding:'4px 8px',fontSize:'12px'},value:d.status,onChange:e=>updateStatus(d.id,e.target.value)},['Open','Investigate','Ready to Test','Fixed','Re-Open','Closed','Rejected'].map(s=>h('option',{key:s,value:s},s)))),
+                h('td',null,h('select',{className:'form-select',style:{width:'140px',padding:'4px 8px',fontSize:'12px'},value:d.status,onChange:e=>updateStatus(d,e.target.value)},['Open','Investigate','Ready to Test','Fixed','Re-Open','Closed','Rejected'].map(s=>h('option',{key:s,value:s},s)))),
                 h('td',null,relTcs.length===0
                   ? h('span',{style:{fontSize:'12px',color:'var(--text3)'}},'—')
                   : h('div',{style:{display:'flex',flexWrap:'wrap',gap:'4px'}},relTcs.map(tc=>h('span',{key:tc.id,className:'tag',style:{fontSize:'11px'}},tc.title)))
@@ -4064,7 +4186,50 @@ function DefectsPage({ teamDefects, setDefects, testCases, teamTCs, teamTasks, t
             }))
           )
         ),
-
+    defCommentPending&&ReactDOM.createPortal(
+      h('div',{className:'modal-overlay',style:{zIndex:10001},onClick:e=>{if(e.target.className==='modal-overlay'){setDefCommentPending(null);setDefCommentInput('');}}},
+        h('div',{className:'modal modal-sm'},
+          h('div',{className:'modal-header'},
+            h('span',{className:'modal-title',style:{display:'flex',alignItems:'center',gap:'8px'}},
+              h('span',{className:'ms ms-sm',style:{color:'var(--amber)'}},'comment'),
+              'บังคับ Comment — '+defCommentPending.newStatus
+            ),
+            h('button',{className:'modal-close',onClick:()=>{setDefCommentPending(null);setDefCommentInput('');}},h('span',{className:'ms ms-sm'},'close'))
+          ),
+          h('div',{className:'modal-body'},
+            h('p',{style:{fontSize:'13px',color:'var(--text2)',marginBottom:'12px'}},
+              'Defect: ',h('strong',{style:{color:'var(--text)'}},defCommentPending.defect.title)
+            ),
+            h('div',{className:'form-group',style:{marginBottom:0}},
+              h('label',{className:'form-label'},'Comment ',h('span',{className:'req'},'*')),
+              h('textarea',{
+                className:'form-textarea',autoFocus:true,value:defCommentInput,
+                onChange:e=>setDefCommentInput(e.target.value),
+                placeholder:defCommentPending.newStatus==='Re-Open'?'กรุณาระบุเหตุผลที่ Re-Open...':'กรุณาระบุเหตุผลที่ Reject...',
+                style:{minHeight:'100px'}
+              })
+            )
+          ),
+          h('div',{className:'modal-footer'},
+            h('button',{className:'btn',onClick:()=>{setDefCommentPending(null);setDefCommentInput('');}}, 'ยกเลิก'),
+            h('button',{
+              className:'btn btn-primary',
+              disabled:!defCommentInput.trim(),
+              onClick:()=>{
+                if(!defCommentInput.trim()){showToast('กรุณาใส่ Comment','error');return;}
+                const {defect,newStatus}=defCommentPending;
+                setDefects(p=>p.map(x=>x.id===defect.id?{...x,status:newStatus,comment:defCommentInput,updatedAt:now()}:x));
+                addLog('Update Defect','เปลี่ยน Status: '+defect.title+' → '+newStatus);
+                showToast('อัพเดทแล้ว');
+                setDefCommentPending(null);
+                setDefCommentInput('');
+              }
+            },'✓ บันทึก')
+          )
+        )
+      ),
+      document.getElementById('modal-root')
+    )
   );
 }
 
