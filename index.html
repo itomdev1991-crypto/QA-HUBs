@@ -529,6 +529,34 @@
   .notif-item:hover { background: var(--bg3); }
   .notif-item-icon { width: 32px; height: 32px; border-radius: 50%; background: var(--accent-bg); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
   .notif-empty { padding: 24px 16px; text-align: center; color: var(--text3); font-size: 13px; }
+
+  /* ── PROJECT TYPE SELECTION ── */
+  .proj-type-card {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 14px; padding: 28px 20px; border-radius: var(--r2); border: 2px solid var(--border);
+    background: var(--bg3); cursor: pointer; transition: all 0.2s; text-align: center; flex: 1;
+  }
+  .proj-type-card:hover { border-color: var(--accent); background: var(--accent-bg); }
+  .proj-type-card.selected { border-color: var(--accent); background: var(--accent-bg); box-shadow: 0 0 0 3px rgba(229,9,20,0.15); }
+  .proj-type-card .ms { font-size: 36px; }
+  .proj-type-card .type-title { font-size: 15px; font-weight: 700; letter-spacing: -0.2px; }
+  .proj-type-card .type-desc { font-size: 12px; color: var(--text3); line-height: 1.5; }
+  .proj-type-card.custom-card:hover { border-color: var(--purple); background: var(--purple-bg); }
+  .proj-type-card.custom-card.selected { border-color: var(--purple); background: var(--purple-bg); box-shadow: 0 0 0 3px rgba(177,151,252,0.18); }
+
+  /* ── CUSTOM TC LABEL EDITABLE ── */
+  .label-editable-wrap { position: relative; display: inline-flex; align-items: center; gap: 4px; }
+  .label-editable-input {
+    background: transparent; border: none; border-bottom: 1px dashed var(--border2);
+    color: var(--purple); font-size: 12px; font-weight: 500; font-family: var(--font);
+    outline: none; padding: 0 2px; min-width: 60px; max-width: 140px; cursor: text;
+  }
+  .label-editable-input:focus { border-bottom-color: var(--purple); background: var(--purple-bg); border-radius: 2px; }
+  .custom-badge {
+    display: inline-flex; align-items: center; gap: 4px; background: var(--purple-bg);
+    border: 1px solid var(--purple); color: var(--purple); padding: 2px 8px;
+    border-radius: 20px; font-size: 10px; font-weight: 700; letter-spacing: 0.5px;
+  }
 </style>
 </head>
 <body>
@@ -562,6 +590,8 @@ const uid = () => Math.random().toString(36).slice(2, 10);
 const now = () => new Date().toISOString();
 const fmtDate = (d) => d ? new Date(d).toLocaleString('th-TH',{dateStyle:'short',timeStyle:'short'}) : '';
 const fmtDateOnly = (d) => d ? new Date(d).toLocaleDateString('th-TH') : '';
+// Normalize relatedTcIds — may arrive as string (legacy) or array
+const toArr = (v) => Array.isArray(v) ? v : (v && typeof v === 'string' && v.trim() ? v.split(',').map(s=>s.trim()).filter(Boolean) : []);
 const shortUrl = (type, id) => { const base = window.location.href.split('#')[0]; return base + '#' + type + '=' + id; };
 const shortUrlDisplay = (type, id) => (window.location.hostname||'local') + '#' + type + '=' + id.slice(0,8);
 const copyText = (text, showToast) => {
@@ -600,8 +630,8 @@ const detectionOpts = ['Positive','Negative'];
 
 // ─── GOOGLE SHEETS CONFIG ─────────────────────────────────────────────────────
 // ใส่ URL ของ Google Apps Script Web App ที่ Deploy แล้ว
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbwXdgFSQizSFem0TSAH5MHv8MkAhpjdnHUytFr58TDoihKF632gHhCTiQbW09mdd6Ns/exec';
-const SS_ID   = '1x-WEHf1Q1wF_A7E8ngx1Nu7i7oCWZ74Ys3sgqHtW0lk'; // Google Spreadsheet ID
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbzuohg-R86MgjhSiKF1cR0o06DuCwixk1XxwcnYK8MR247GHeCkenaoLFBQoW7msToD1g/exec';
+const SS_ID   = '1NMcXR2rOgFRWVo-pG2icvY2vMwrtZBj91umGngwTGXI'; // Google Spreadsheet ID
 
 // ─── FIELD ENCRYPTION ────────────────────────────────────────────────────────
 // XOR cipher + base64 — ทำให้ข้อมูลใน Google Sheet อ่านไม่ออกโดยตรง
@@ -807,6 +837,9 @@ const api = {
   update(sheet, data)     { return this._write({ action:'update',     sheet, id:data.id, data }); },
   delete(sheet, id)       { return this._write({ action:'delete',     sheet, id }); },
   bulkInsert(sheet, data) { return this._write({ action:'bulkInsert', sheet, data }); },
+
+  // ── Custom sheet write — no sheet key validation, pass payload directly ──
+  write(payload) { return this._write(payload); },
 
   // ── Raw write (no sheet validation) — for sendVerifyCode / verifyCode ──
   async rawWrite(payload) {
@@ -1018,12 +1051,9 @@ function App() {
   const setLogs         = makeSet(setLogsState,         'logs');
   const setLoginLogs    = makeSet(setLoginLogsState,    'loginLogs');
   // setPendingMembers: dedup by (teamId+userId) ก่อนบันทึกเสมอ — ป้องกัน duplicate ทุกกรณี
-  // syncSheet ต้องอยู่นอก state updater (React ไม่อนุญาต side effects ใน updater)
+  // FIX v7: ใช้ api.insert/update/delete ตรงๆ แทน syncSheet diff เพื่อป้องกัน race condition
   const setPendingMembers = (fn) => {
-    let dedupedResult = null;
-    let prevSnapshot = null;
     setPendingMembersState(prev => {
-      prevSnapshot = prev;
       const next = typeof fn === 'function' ? fn(prev) : fn;
       // Dedup: ถ้า teamId+userId ซ้ำ ให้เอา record ที่ requestedAt ใหม่กว่า
       const dedupMap = {};
@@ -1033,15 +1063,44 @@ function App() {
           dedupMap[key] = p;
         }
       });
-      dedupedResult = Object.values(dedupMap);
-      return dedupedResult;
-    });
-    // syncSheet ต้องเรียกหลัง setState เสร็จ (ใช้ setTimeout 0 เพื่อออกจาก updater)
-    setTimeout(() => {
-      if (dedupedResult !== null && prevSnapshot !== null) {
-        syncSheet('pending', dedupedResult, prevSnapshot);
+      const deduped = Object.values(dedupMap);
+
+      // ── Direct API sync (ไม่ใช้ diff เพื่อป้องกัน bug React updater closure) ──
+      if (USE_GAS_REF.current) {
+        const prevMap = Object.fromEntries((prev || []).map(o => [o.id, o]));
+        const nextMap = Object.fromEntries(deduped.map(o => [o.id, o]));
+
+        // INSERT rows ใหม่ที่ไม่เคยมีใน prev
+        deduped.forEach(item => {
+          if (!prevMap[item.id]) {
+            api.insert('pending', item).catch(e =>
+              console.error('[QAHUBs] insert pending failed:', e.message)
+            );
+          }
+        });
+        // UPDATE rows ที่เปลี่ยนแปลง
+        deduped.forEach(item => {
+          if (prevMap[item.id] && JSON.stringify(prevMap[item.id]) !== JSON.stringify(item)) {
+            api.update('pending', item).catch(e =>
+              console.error('[QAHUBs] update pending failed:', e.message)
+            );
+          }
+        });
+        // DELETE rows ที่หายไป
+        (prev || []).forEach(item => {
+          if (!nextMap[item.id]) {
+            api.delete('pending', item.id).catch(e =>
+              console.error('[QAHUBs] delete pending failed:', e.message)
+            );
+          }
+        });
+      } else {
+        // Fallback localStorage
+        try { localStorage.setItem('qah_pending_members', JSON.stringify(deduped)); } catch {}
       }
-    }, 0);
+
+      return deduped;
+    });
   };
 
   // ── Auto-poll pending every 30s (real-time without reload) ──
@@ -1119,10 +1178,10 @@ function App() {
   const teamProjects = useMemo(() => projects.filter(p => p.teamId === currentTeam?.id), [projects, currentTeam]);
   const teamTasks = useMemo(() => tasks.filter(t => teamProjects.some(p => p.id === t.projectId)), [tasks, teamProjects]);
   const teamTCs = useMemo(() => testCases.filter(tc => teamTasks.some(t => t.id === tc.taskId)), [testCases, teamTasks]);
-  const teamDefects = useMemo(() => defects.filter(d => { const ids = d.relatedTcIds && d.relatedTcIds.length ? d.relatedTcIds : (d.testCaseId ? [d.testCaseId] : []); return ids.some(id => teamTCs.some(tc => tc.id === id)) || d.teamId === currentTeam?.id || (!ids.length && d.createdBy); }), [defects, teamTCs, currentTeam]);
+  const teamDefects = useMemo(() => defects.filter(d => { const ids = toArr(d.relatedTcIds).length ? toArr(d.relatedTcIds) : (d.testCaseId ? [d.testCaseId] : []); return ids.some(id => teamTCs.some(tc => tc.id === id)) || d.teamId === currentTeam?.id || (!ids.length && d.createdBy); }), [defects, teamTCs, currentTeam]);
 
   const [defectModalCtx, setDefectModalCtx] = useState(null);
-  const openDefectModal = (editDef, initialTcId, allTCs) => setDefectModalCtx({ editDef, initialTcId, allTCs });
+  const openDefectModal = (editDef, initialTcId, allTCs) => setDefectModalCtx({ editDef, initialTcId, allTCs, _key: editDef ? editDef.id : 'new-defect-'+uid() });
   const closeDefectModal = () => setDefectModalCtx(null);
 
   const [theme, setTheme] = useState(() => localStorage.getItem('qah_theme') || 'dark');
@@ -1214,6 +1273,33 @@ function App() {
 
   const navigate = (pg, ctx2={}) => { setPage(pg); closeSidebar(); if (ctx2.projectId !== undefined) setNavCtx(p=>({...p,...ctx2})); else if (Object.keys(ctx2).length) setNavCtx(p=>({...p,...ctx2})); };
 
+  // ── Deep-link: #tc=ID หรือ #def=ID → navigate + เปิด modal อัตโนมัติ ──
+  useEffect(() => {
+    if (loading) return;
+    if (!currentUser || !currentTeam) return;
+    const hash = window.location.hash;
+    if (!hash || hash.length < 4) return;
+    const m = hash.slice(1).match(/^(tc|def)=(.+)$/);
+    if (!m) return;
+    const [, type, id] = m;
+    history.replaceState(null, '', window.location.pathname + window.location.search);
+    if (type === 'def') {
+      const d = defects.find(x => x.id === id);
+      if (!d) { showToast('ไม่พบ Defect นี้ หรือคุณไม่มีสิทธิ์เข้าถึง', 'error'); return; }
+      setPage('defects');
+      openDefectModal(d, null, teamTCs);
+    } else if (type === 'tc') {
+      const tc = testCases.find(x => x.id === id);
+      if (!tc) { showToast('ไม่พบ Test Case นี้ หรือคุณไม่มีสิทธิ์เข้าถึง', 'error'); return; }
+      const task = tasks.find(t => t.id === tc.taskId);
+      if (!task) { showToast('ไม่พบ Task ของ Test Case นี้', 'error'); return; }
+      const proj = projects.find(p => p.id === task.projectId);
+      if (!proj) { showToast('ไม่พบ Project ของ Test Case นี้', 'error'); return; }
+      setNavCtx({ projectId: proj.id, taskId: task.id, openTcId: tc.id });
+      setPage('task-detail');
+    }
+  }, [loading, currentUser, currentTeam]); // รัน 1 ครั้งหลัง data + session พร้อม
+
   const ctx = { users, setUsers, teams, setTeams, members, setMembers,
     projects, setProjects, tasks, setTasks, testCases, setTestCases,
     defects, setDefects, logs, setLogs, loginLogs, setLoginLogs,
@@ -1296,7 +1382,7 @@ function App() {
       )
     ),
     defectModalCtx && h(DefectModal, {
-      key: defectModalCtx.editDef ? defectModalCtx.editDef.id : 'new-defect-'+Date.now(),
+      key: defectModalCtx._key,
       initialTcId: defectModalCtx.initialTcId,
       allTCs: defectModalCtx.allTCs || teamTCs,
       defects, setDefects, currentUser, users, showToast, addLog,
@@ -1870,6 +1956,11 @@ function InviteWaitingPage({ teamName, teamId, currentUser, pendingMembers, setP
   useEffect(() => {
     if (status !== 'approved') return;
     if (countdown <= 0) {
+      // ล้าง pending record ที่ approved แล้วออก (ไม่ให้โชว์ในหน้า team-select)
+      setPendingMembers(p => p.filter(x => !(x.teamId === teamId && x.userId === currentUser?.id)));
+      // set currentTeam แล้วไปหน้า dashboard โดยตรง
+      const team = teams && teams.find(t => t.id === teamId);
+      if (team) { setCurrentTeam(team); setPage('dashboard'); }
       setInviteWaitingTeam(null);
       return;
     }
@@ -1877,7 +1968,11 @@ function InviteWaitingPage({ teamName, teamId, currentUser, pendingMembers, setP
     return () => clearTimeout(t);
   }, [status, countdown]);
 
-  const goCreateTeam = () => { setInviteWaitingTeam(null); };
+  const goCreateTeam = () => {
+    // ล้าง pending record ของทีมนี้ออกก่อนออกจากหน้า
+    setPendingMembers(p => p.filter(x => !(x.teamId === teamId && x.userId === currentUser?.id)));
+    setInviteWaitingTeam(null);
+  };
 
   // ── APPROVED ──
   if (status === 'approved') {
@@ -1896,7 +1991,12 @@ function InviteWaitingPage({ teamName, teamId, currentUser, pendingMembers, setP
           h('div', { style:{color:'var(--green)',fontSize:'13px',marginTop:'4px'} }, 'กำลังพาไปหน้าเลือกทีม...')
         ),
         h('button', { className:'btn btn-primary', style:{justifyContent:'center',padding:'10px 24px'},
-          onClick: () => { setCountdown(0); }
+          onClick: () => {
+            setPendingMembers(p => p.filter(x => !(x.teamId === teamId && x.userId === currentUser?.id)));
+            const team = teams && teams.find(t => t.id === teamId);
+            if (team) { setCurrentTeam(team); setPage('dashboard'); }
+            setInviteWaitingTeam(null);
+          }
         }, 'ไปเลยตอนนี้ →')
       )
     );
@@ -2059,21 +2159,28 @@ function TeamSelectPage({ currentUser, teams, setTeams, members, setMembers, myT
           ))
         )
       ),
-      // Pending approval section
-      pendingMembers && pendingMembers.filter(p => p.userId===currentUser.id && p.status==='pending').length > 0 && h('div', { style:{marginBottom:'24px'} },
-        h('p', { className:'section-title', style:{marginBottom:'12px',color:'var(--amber)'} }, h(React.Fragment,null,h('span',{className:'ms ms-xs',style:{marginRight:'4px'}},'hourglass_top'),'รอการอนุมัติ')),
-        h('div', { style:{display:'flex', flexDirection:'column', gap:'10px'} },
-          pendingMembers.filter(p => p.userId===currentUser.id && p.status==='pending').map(p =>
-            h('div', { key:p.id, style:{background:'var(--amber-bg)',border:'1px solid var(--amber)',borderRadius:'var(--r)',padding:'12px 16px',display:'flex',alignItems:'center',justifyContent:'space-between'} },
-              h('div', null,
-                h('div', { style:{fontWeight:'600',marginBottom:'2px'} }, p.teamName || p.teamId),
-                h('div', { style:{fontSize:'12px',color:'var(--amber)'} }, h(React.Fragment,null,h('span',{className:'ms ms-xs',style:{marginRight:'4px'}},'hourglass_top'),'รอ Admin อนุมัติเข้าร่วมทีม'))
-              ),
-              h('span', { className:'badge badge-amber' }, 'รออนุมัติ')
+      // Pending approval section — dedup by teamId, แสดงแค่ทีมละ 1 แถว
+      (()=>{
+        const rawPending = (pendingMembers||[]).filter(p => p.userId===currentUser.id && p.status==='pending');
+        const dedupPending = Object.values(rawPending.reduce((acc,p)=>{
+          if(!acc[p.teamId]||String(p.requestedAt)>String(acc[p.teamId].requestedAt)) acc[p.teamId]=p;
+          return acc;
+        },{}));
+        return dedupPending.length > 0 && h('div', { style:{marginBottom:'24px'} },
+          h('p', { className:'section-title', style:{marginBottom:'12px',color:'var(--amber)'} }, h(React.Fragment,null,h('span',{className:'ms ms-xs',style:{marginRight:'4px'}},'hourglass_top'),'รอการอนุมัติ')),
+          h('div', { style:{display:'flex', flexDirection:'column', gap:'10px'} },
+            dedupPending.map(p =>
+              h('div', { key:p.teamId, style:{background:'var(--amber-bg)',border:'1px solid var(--amber)',borderRadius:'var(--r)',padding:'12px 16px',display:'flex',alignItems:'center',justifyContent:'space-between'} },
+                h('div', null,
+                  h('div', { style:{fontWeight:'600',marginBottom:'2px'} }, p.teamName || p.teamId),
+                  h('div', { style:{fontSize:'12px',color:'var(--amber)'} }, h(React.Fragment,null,h('span',{className:'ms ms-xs',style:{marginRight:'4px'}},'hourglass_top'),'รอ Admin อนุมัติเข้าร่วมทีม'))
+                ),
+                h('span', { className:'badge badge-amber' }, 'รออนุมัติ')
+              )
             )
           )
-        )
-      ),
+        );
+      })(),
       h('div', { style:{display:'flex', gap:'10px'} },
         h('button', { className:'btn btn-primary', style:{flex:1, justifyContent:'center'}, onClick:()=>setShowCreate(true) }, '+ สร้างทีมใหม่'),
         h('button', { className:'btn', style:{flex:1, justifyContent:'center'}, onClick:()=>setShowJoin(true) }, 'เข้าร่วมด้วย Code')
@@ -2848,18 +2955,85 @@ function DashboardPage({ teamTCs, teamDefects, teamProjects, teamTasks, navigate
   );
 }
 
+// ─── PROJECT TYPE SELECTOR POPUP ─────────────────────────────────────────────
+function ProjectTypeModal({ onSelect, onClose }) {
+  const [selType, setSelType] = useState('standard');
+  const el = h('div',{className:'modal-overlay',style:{zIndex:10002},onClick:e=>{if(e.target.className==='modal-overlay')onClose();}},
+    h('div',{className:'modal modal-sm',style:{maxWidth:'540px',height:'auto'}},
+      h('div',{className:'modal-header'},
+        h('span',{className:'modal-title',style:{display:'flex',alignItems:'center',gap:'8px'}},
+          h('span',{className:'ms ms-sm',style:{color:'var(--accent)'}},'folder_special'),
+          'เลือกรูปแบบ Test Case'
+        ),
+        h('button',{className:'modal-close',onClick:onClose},h('span',{className:'ms ms-sm'},'close'))
+      ),
+      h('div',{className:'modal-body'},
+        h('p',{style:{fontSize:'13px',color:'var(--text2)',marginBottom:'20px',lineHeight:'1.6'}},
+          'เลือกรูปแบบการจัดการ Test Case สำหรับ Project นี้'
+        ),
+        h('div',{style:{display:'flex',gap:'14px',marginBottom:'8px'}},
+          // Standard card
+          h('div',{
+            className:`proj-type-card${selType==='standard'?' selected':''}`,
+            onClick:()=>setSelType('standard')
+          },
+            h('span',{className:'ms',style:{color:'var(--green)'}},'assignment'),
+            h('div',{className:'type-title'},'Test Case เดิม'),
+            h('div',{className:'type-desc'},'ใช้โครงสร้าง Test Case มาตรฐาน\nพร้อม field เดิมทั้งหมด'),
+            selType==='standard'&&h('span',{className:'badge badge-green',style:{marginTop:'4px'}},
+              h('span',{className:'ms ms-xs',style:{marginRight:'3px'}},'check_circle'),'เลือกอยู่'
+            )
+          ),
+          // Custom card
+          h('div',{
+            className:`proj-type-card custom-card${selType==='custom'?' selected':''}`,
+            onClick:()=>setSelType('custom')
+          },
+            h('span',{className:'ms',style:{color:'var(--purple)'}},'tune'),
+            h('div',{className:'type-title'},'Custom Test Case'),
+            h('div',{className:'type-desc'},'กำหนดชื่อ field เองได้ทั้งหมด\nในส่วนข้อมูลหลัก'),
+            selType==='custom'&&h('span',{className:'custom-badge',style:{marginTop:'4px'}},
+              h('span',{className:'ms ms-xs',style:{marginRight:'3px'}},'check_circle'),'เลือกอยู่'
+            )
+          )
+        )
+      ),
+      h('div',{className:'modal-footer'},
+        h('button',{className:'btn',onClick:onClose},'ยกเลิก'),
+        h('button',{
+          className:`btn ${selType==='custom'?'':'btn-primary'}`,
+          style: selType==='custom'?{background:'var(--purple)',borderColor:'var(--purple)',color:'white',boxShadow:'0 2px 8px rgba(177,151,252,0.3)'}:{},
+          onClick:()=>onSelect(selType)
+        },
+          h('span',{className:'ms ms-sm'},selType==='custom'?'tune':'assignment'),
+          selType==='custom'?'ใช้ Custom TC':'ใช้ Test Case เดิม'
+        )
+      )
+    )
+  );
+  return ReactDOM.createPortal(el, document.getElementById('modal-root'));
+}
+
 // ─── PROJECTS PAGE ────────────────────────────────────────────────────────────
-function ProjectsPage({ teamProjects, setProjects, tasks, teamTasks, currentTeam, currentUser, canEdit, canDelete, showToast, addLog, navigate }) {
+function ProjectsPage({ teamProjects, setProjects, tasks, teamTasks, currentTeam, currentUser, canEdit, canDelete, showToast, addLog, navigate, USE_GAS }) {
   const [showModal, setShowModal] = useState(false);
+  const [showTypeModal, setShowTypeModal] = useState(false);
   const [editProj, setEditProj] = useState(null);
-  const [form, setForm] = useState({ name:'', description:'', status:'Active', startDate:'', endDate:'' });
+  const [form, setForm] = useState({ name:'', description:'', status:'Active', startDate:'', endDate:'', tcMode:'standard' });
   const [search, setSearch] = useState('');
   const [delConfirm, setDelConfirm] = useState(null);
 
   const filtered = teamProjects.filter(p => p.name.toLowerCase().includes(search.toLowerCase()));
 
-  const openCreate = () => { setForm({name:'',description:'',status:'Active',startDate:'',endDate:''}); setEditProj(null); setShowModal(true); };
-  const openEdit = (p) => { setForm({name:p.name,description:p.description||'',status:p.status||'Active',startDate:p.startDate||'',endDate:p.endDate||''}); setEditProj(p); setShowModal(true); };
+  // เมื่อกด "+ New Project" จะ popup เลือก mode ก่อน
+  const openCreate = () => { setShowTypeModal(true); };
+  const handleTypeSelect = (tcMode) => {
+    setShowTypeModal(false);
+    setForm({name:'',description:'',status:'Active',startDate:'',endDate:'',tcMode});
+    setEditProj(null);
+    setShowModal(true);
+  };
+  const openEdit = (p) => { setForm({name:p.name,description:p.description||'',status:p.status||'Active',startDate:p.startDate||'',endDate:p.endDate||'',tcMode:p.tcMode||'standard'}); setEditProj(p); setShowModal(true); };
 
   const save = () => {
     if (!form.name.trim()) { showToast('กรุณาใส่ชื่อ Project','error'); return; }
@@ -2870,18 +3044,26 @@ function ProjectsPage({ teamProjects, setProjects, tasks, teamTasks, currentTeam
     } else {
       const np = { id:uid(), teamId:currentTeam.id, createdBy:currentUser.id, createdAt:now(), ...form };
       setProjects(p => [...p, np]);
-      addLog('Create Project', `สร้าง Project: ${form.name}`);
+      addLog('Create Project', `สร้าง Project: ${form.name} [${form.tcMode==='custom'?'Custom TC':'Standard TC'}]`);
       showToast('สร้าง Project สำเร็จ');
+      // ── สร้าง Custom TC Sheet แยกใน Google Sheets เมื่อ tcMode = custom ──
+      if (form.tcMode === 'custom' && USE_GAS) {
+        api.write({ action:'initCustomProjectSheet', projectId:np.id, projectName:np.name, customLabels:{} })
+          .catch(e => console.warn('[QAHUBs] initCustomProjectSheet failed:', e.message));
+      }
     }
     setShowModal(false);
   };
 
   const deleteProj = (p) => {
-    const tIds = tasks.filter(t=>t.projectId===p.id).map(t=>t.id);
     setProjects(pr => pr.filter(x=>x.id!==p.id));
-    // cascade handled in parent
     addLog('Delete Project', `ลบ Project: ${p.name} (cascade)`);
     showToast(`ลบ Project "${p.name}" และข้อมูลทั้งหมดสำเร็จ`);
+    // ── ลบ Custom TC Sheet เมื่อลบ Project ที่เป็น custom mode ──
+    if (p.tcMode === 'custom' && USE_GAS) {
+      api.write({ action:'deleteCustomProjectSheet', projectId:p.id })
+        .catch(e => console.warn('[QAHUBs] deleteCustomProjectSheet failed:', e.message));
+    }
     setDelConfirm(null);
   };
 
@@ -2897,9 +3079,13 @@ function ProjectsPage({ teamProjects, setProjects, tasks, teamTasks, currentTeam
     h('div', { style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))',gap:'14px'} },
       filtered.map(p => {
         const ptasks = tasks.filter(t=>t.projectId===p.id);
+        const isCustom = p.tcMode === 'custom';
         return h('div', { key:p.id, className:'card', style:{cursor:'pointer'}, onClick:()=>navigate('project-detail',{projectId:p.id}) },
           h('div', { className:'flex-between', style:{marginBottom:'10px'} },
-            h('div', { style:{fontWeight:'600',fontSize:'15px'} }, p.name),
+            h('div', { style:{display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap'} },
+              h('div', { style:{fontWeight:'600',fontSize:'15px'} }, p.name),
+              isCustom && h('span',{className:'custom-badge'},h('span',{className:'ms ms-xs',style:{marginRight:'2px'}},'tune'),'Custom TC')
+            ),
             h('span', { className:`badge ${p.status==='Active'?'badge-green':'badge-gray'}` }, p.status||'Active')
           ),
           p.description && h('p', { style:{fontSize:'12px',color:'var(--text2)',marginBottom:'10px'} }, p.description),
@@ -2911,12 +3097,21 @@ function ProjectsPage({ teamProjects, setProjects, tasks, teamTasks, currentTeam
         );
       })
     ),
+    showTypeModal && h(ProjectTypeModal, { onSelect:handleTypeSelect, onClose:()=>setShowTypeModal(false) }),
     showModal && h(Modal, { title: editProj?'แก้ไข Project':'สร้าง Project ใหม่', onClose:()=>setShowModal(false) },
       h('div', { className:'form-group' }, h('label',{className:'form-label'},'ชื่อ Project ',h('span',{className:'req'},'*')),h('input',{className:'form-input',value:form.name,onChange:e=>setForm(p=>({...p,name:e.target.value}))})),
       h('div', { className:'form-group' }, h('label',{className:'form-label'},'คำอธิบาย'),h('textarea',{className:'form-textarea',value:form.description,onChange:e=>setForm(p=>({...p,description:e.target.value}))})),
       h('div', { className:'form-row' },
         h('div',{className:'form-group'},h('label',{className:'form-label'},'สถานะ'),h('select',{className:'form-select',value:form.status,onChange:e=>setForm(p=>({...p,status:e.target.value}))},['Active','On Hold','Completed','Cancelled'].map(s=>h('option',{key:s,value:s},s)))),
         h('div',{className:'form-group'},h('label',{className:'form-label'},'Start Date'),h('input',{type:'date',className:'form-input',value:form.startDate,onChange:e=>setForm(p=>({...p,startDate:e.target.value}))})),
+      ),
+      // แสดง TC mode (read-only ตอนสร้าง)
+      !editProj && h('div',{style:{display:'flex',alignItems:'center',gap:'8px',padding:'10px 14px',background:'var(--bg3)',borderRadius:'var(--r)',border:'1px solid var(--border)',marginBottom:'12px'}},
+        h('span',{className:'ms ms-sm',style:{color:form.tcMode==='custom'?'var(--purple)':'var(--green)'}},'tune'),
+        h('div',null,
+          h('div',{style:{fontSize:'12px',fontWeight:'600',color:form.tcMode==='custom'?'var(--purple)':'var(--green)'}},form.tcMode==='custom'?'Custom Test Case':'Test Case มาตรฐาน'),
+          h('div',{style:{fontSize:'11px',color:'var(--text3)',marginTop:'2px'}},form.tcMode==='custom'?'สามารถแก้ไขชื่อ field ได้เองหลังสร้าง project':'ใช้ field มาตรฐานของระบบ')
+        )
       ),
       h('div', { className:'modal-footer' }, h('button',{className:'btn',onClick:()=>setShowModal(false)},'ยกเลิก'), h('button',{className:'btn btn-primary',onClick:save},'บันทึก'))
     ),
@@ -3056,11 +3251,13 @@ function ProjectDetailPage({ navCtx, projects, tasks, setTasks, testCases, teamT
 }
 
 // ─── TASK DETAIL PAGE (Test Cases) ───────────────────────────────────────────
-function TaskDetailPage({ navCtx, projects, tasks, testCases, setTestCases, defects, setDefects, currentUser, users, currentTeam, canEdit, canDelete, showToast, addLog, navigate, openDefectModal }) {
+function TaskDetailPage({ navCtx, setNavCtx, projects, tasks, testCases, setTestCases, defects, setDefects, currentUser, users, currentTeam, canEdit, canDelete, showToast, addLog, navigate, openDefectModal, USE_GAS }) {
   const task = tasks.find(t => t.id === navCtx.taskId);
   const project = projects.find(p => p.id === navCtx.projectId);
+  const isCustomMode = project?.tcMode === 'custom';
   const [tab, setTab] = useState('testcases');
   const [showTC, setShowTC] = useState(false);
+  const [showCustomTC, setShowCustomTC] = useState(false);
   const [editTC, setEditTC] = useState(null);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
@@ -3068,9 +3265,21 @@ function TaskDetailPage({ navCtx, projects, tasks, testCases, setTestCases, defe
   const [selected, setSelected] = useState([]);
   const [delConfirm, setDelConfirm] = useState(null);
   const [cloneRename, setCloneRename] = useState(null); // {tc, pendingTitle}
+  const [tcCommentPending, setTcCommentPending] = useState(null); // {tc, newStatus}
+  const [tcCommentInput, setTcCommentInput] = useState('');
+  const [moveModal, setMoveModal] = useState(null); // { tcIds: [] } — Move TC modal
+
+  // ── Deep-link: ถ้า navCtx มี openTcId ให้เปิด TCModal ทันที ──
+  useEffect(() => {
+    if (!navCtx.openTcId) return;
+    const tc = testCases.find(x => x.id === navCtx.openTcId);
+    if (tc) { setEditTC(tc); if (isCustomMode) setShowCustomTC(true); else setShowTC(true); }
+    // ล้าง openTcId ออกจาก navCtx หลังใช้แล้ว
+    setNavCtx(p => ({ ...p, openTcId: null }));
+  }, [navCtx.openTcId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!task || !project) return h('div',{className:'empty'},'ไม่พบ Task');
-  
+
   const taskTCs = testCases.filter(tc => tc.taskId === task.id);
   const filtered = taskTCs.filter(tc => {
     const matchSearch = !search || tc.title.toLowerCase().includes(search.toLowerCase()) || tc.scenarioDescription?.toLowerCase().includes(search.toLowerCase());
@@ -3084,6 +3293,11 @@ function TaskDetailPage({ navCtx, projects, tasks, testCases, setTestCases, defe
     setDefects(p => p.filter(x => x.testCaseId !== tc.id));
     addLog('Delete TC', `ลบ TC: ${tc.title}`);
     showToast('ลบ Test Case สำเร็จ');
+    // ── ลบ row ใน Custom TC Sheet (เฉพาะ custom mode project) ──
+    if (USE_GAS && project?.tcMode === 'custom') {
+      api.write({ action:'deleteCustomTCRow', projectId:project.id, id:tc.id })
+        .catch(e => console.warn('[QAHUBs] deleteCustomTCRow failed:', e.message));
+    }
     setDelConfirm(null);
   };
 
@@ -3121,6 +3335,14 @@ function TaskDetailPage({ navCtx, projects, tasks, testCases, setTestCases, defe
     setTestCases(p => p.filter(x => !selected.includes(x.id)));
     showToast(`ลบ ${selected.length} Test Cases สำเร็จ`);
     setSelected([]);
+  };
+
+  const moveTCs = (tcIds, targetTaskId) => {
+    setTestCases(p => p.map(x => tcIds.includes(x.id) ? { ...x, taskId: targetTaskId, updatedAt: now() } : x));
+    addLog('Move TC', `ย้าย ${tcIds.length} TC → taskId: ${targetTaskId}`);
+    showToast(`ย้าย ${tcIds.length} Test Case สำเร็จ`);
+    setSelected([]);
+    setMoveModal(null);
   };
 
   const exportTCs = (scope) => {
@@ -3308,7 +3530,7 @@ function TaskDetailPage({ navCtx, projects, tasks, testCases, setTestCases, defe
 
   const passed = taskTCs.filter(tc=>tc.status==='Passed'||tc.status==='Pass with Comment').length;
   const passRate = taskTCs.length ? Math.round(passed/taskTCs.length*100) : 0;
-  const taskDefects = defects.filter(d => { const ids=d.relatedTcIds&&d.relatedTcIds.length?d.relatedTcIds:(d.testCaseId?[d.testCaseId]:[]); return ids.some(id=>taskTCs.some(tc=>tc.id===id)); });
+  const taskDefects = defects.filter(d => { const ids=toArr(d.relatedTcIds).length?toArr(d.relatedTcIds):(d.testCaseId?[d.testCaseId]:[]); return ids.some(id=>taskTCs.some(tc=>tc.id===id)); });
 
   const statuses2 = statusOpts.map(s=>({s,count:taskTCs.filter(tc=>tc.status===s).length}));
 
@@ -3323,11 +3545,17 @@ function TaskDetailPage({ navCtx, projects, tasks, testCases, setTestCases, defe
     h('div',{className:'page-header'},
       h('div',null,h('h1',{className:'page-title'},task.name),h('p',{className:'page-subtitle'},`${taskTCs.length} Test Cases • Pass Rate: ${passRate}%`)),
       h('div',{className:'page-actions'},
-        canEdit&&h('button',{className:'btn btn-primary',onClick:()=>{setEditTC(null);setShowTC(true);}},'+  New TC'),
+        canEdit&&!isCustomMode&&h('button',{className:'btn btn-primary',onClick:()=>{setEditTC(null);setShowTC(true);}},'+  New TC'),
+        canEdit&&isCustomMode&&h('button',{
+          className:'btn',
+          style:{background:'var(--purple)',borderColor:'var(--purple)',color:'white',boxShadow:'0 2px 8px rgba(177,151,252,0.25)'},
+          onClick:()=>{setEditTC(null);setShowCustomTC(true);}
+        },h(React.Fragment,null,h('span',{className:'ms ms-sm'},'tune'),' Custom TC')),
         h('button',{className:'btn',onClick:downloadTemplate},'Download Template'),
         canEdit&&h('label',{className:'btn',style:{cursor:'pointer'}},h('input',{type:'file',accept:'.xlsx,.xls',onChange:importTCs}),'Import Excel'),
         h('button',{className:'btn',onClick:()=>exportTCs('task')},'Export Task'),
         selected.length>0&&h('button',{className:'btn',onClick:()=>exportTCs('selected')},`Export (${selected.length})`),
+        selected.length>0&&canEdit&&h('button',{className:'btn',style:{color:'var(--purple)',borderColor:'var(--purple)',background:'var(--purple-bg)'},onClick:()=>setMoveModal({tcIds:[...selected]})},h(React.Fragment,null,h('span',{className:'ms ms-sm',style:{marginRight:'4px'}},'drive_file_move'),`ย้าย (${selected.length})`)),
         selected.length>0&&canDelete&&h('button',{className:'btn btn-danger',onClick:deleteSelected},`ลบ (${selected.length})`)
       )
     ),
@@ -3368,11 +3596,18 @@ function TaskDetailPage({ navCtx, projects, tasks, testCases, setTestCases, defe
         ),
         h('div',{style:{display:'flex',alignItems:'center',gap:'6px'}},
           h('span',{style:{fontSize:'12px',color:'var(--text3)'}},'Status:'),
-          h('select',{className:'form-select',style:{width:'130px',padding:'4px 8px',fontSize:'12px'},onChange:e=>{if(!e.target.value)return;const v=e.target.value;setTestCases(p=>p.map(x=>selected.includes(x.id)?{...x,status:v,updatedAt:now()}:x));addLog('Bulk Update','แก้ไข Status '+selected.length+' TCs → '+v);showToast(`อัพเดท Status ${selected.length} รายการ`);e.target.value='';},defaultValue:''},
-            h('option',{value:''},'เลือก...'),statusOpts.map(s=>h('option',{key:s,value:s},s))
+          h('select',{className:'form-select',style:{width:'130px',padding:'4px 8px',fontSize:'12px'},onChange:e=>{if(!e.target.value)return;const v=e.target.value;
+            if(['Pass with Comment','Cancelled','Deferred'].includes(v)){
+              setTcCommentPending({tc:{id:'__bulk__',title:`${selected.length} Test Cases ที่เลือก`,_bulkIds:selected},newStatus:v});
+            } else {
+              setTestCases(p=>p.map(x=>selected.includes(x.id)?{...x,status:v,updatedAt:now()}:x));addLog('Bulk Update','แก้ไข Status '+selected.length+' TCs → '+v);showToast(`อัพเดท Status ${selected.length} รายการ`);
+            }
+            e.target.value='';},defaultValue:''},
+            [h('option',{key:'',value:''},'เลือก...'),...statusOpts.map(s=>h('option',{key:s,value:s},s))]
           )
         ),
-        h('button',{className:'btn btn-sm',style:{marginLeft:'auto'},onClick:()=>setSelected([])},'ล้างการเลือก')
+        h('button',{className:'btn btn-sm',style:{marginLeft:'auto'},onClick:()=>setSelected([])},'ล้างการเลือก'),
+        canEdit&&h('button',{className:'btn btn-sm',style:{color:'var(--purple)',borderColor:'var(--purple)',background:'var(--purple-bg)'},onClick:()=>setMoveModal({tcIds:[...selected]})},h(React.Fragment,null,h('span',{className:'ms ms-xs',style:{marginRight:'3px'}},'drive_file_move'),'ย้าย TC'))
       ),
       h('div',{className:'table-wrap'},
         h('table',null,
@@ -3381,7 +3616,7 @@ function TaskDetailPage({ navCtx, projects, tasks, testCases, setTestCases, defe
             h('th',null,'Title'),h('th',null,'Assignee'),h('th',null,'Priority'),h('th',null,'Detection'),h('th',null,'Status'),h('th',null,'Steps'),h('th',null,'Defect'),h('th',null,'')
           )),
           h('tbody',null,filtered.map(tc=>{
-            const tcDefs=defects.filter(d=>(d.relatedTcIds&&d.relatedTcIds.includes(tc.id))||(!d.relatedTcIds&&d.testCaseId===tc.id));
+            const tcDefs=defects.filter(d=>toArr(d.relatedTcIds).includes(tc.id)||(toArr(d.relatedTcIds).length===0&&d.testCaseId===tc.id));
             const tcFiles = tc.files||[];
             const stepFiles = (tc.steps||[]).reduce((acc,s)=>acc+(s.files?.length||0),0);
             const totalFiles = tcFiles.length + stepFiles;
@@ -3389,7 +3624,7 @@ function TaskDetailPage({ navCtx, projects, tasks, testCases, setTestCases, defe
               h('td',null,h('input',{type:'checkbox',checked:selected.includes(tc.id),onChange:e=>{e.stopPropagation();setSelected(p=>e.target.checked?[...p,tc.id]:p.filter(x=>x!==tc.id));}})),
               h('td',null,
                 h('div',{style:{display:'flex',alignItems:'center',gap:'6px',flexWrap:'wrap'}},
-                  h('span',{className:'tc-title',onClick:()=>{setEditTC(tc);setShowTC(true);}},tc.title),
+                  h('span',{className:'tc-title',onClick:()=>{setEditTC(tc); isCustomMode?setShowCustomTC(true):setShowTC(true);}},tc.title),
                   totalFiles > 0 && h('span',{
                     title:`ไฟล์แนบ ${totalFiles} ไฟล์`,
                     onClick:()=>{setEditTC(tc);setShowTC(true);},
@@ -3435,7 +3670,17 @@ function TaskDetailPage({ navCtx, projects, tasks, testCases, setTestCases, defe
                 className:'form-select',
                 style:{width:'120px',padding:'3px 6px',fontSize:'12px',background:'var(--bg3)'},
                 value:tc.status,
-                onChange:e=>{e.stopPropagation();setTestCases(p=>p.map(x=>x.id===tc.id?{...x,status:e.target.value,updatedAt:now()}:x));addLog('Update TC',`แก้ไข Status: ${tc.title} → ${e.target.value}`);showToast('อัพเดทแล้ว');}
+                onChange:e=>{
+                  e.stopPropagation();
+                  const v=e.target.value;
+                  if(['Pass with Comment','Cancelled','Deferred'].includes(v)){
+                    setTcCommentPending({tc,newStatus:v});
+                  } else {
+                    setTestCases(p=>p.map(x=>x.id===tc.id?{...x,status:v,updatedAt:now()}:x));
+                    addLog('Update TC',`แก้ไข Status: ${tc.title} → ${v}`);
+                    showToast('อัพเดทแล้ว');
+                  }
+                }
               },statusOpts.map(s=>h('option',{key:s,value:s},s)))),
               h('td',null,h('span',{style:{color:'var(--text2)',fontSize:'12px'}},(tc.steps||[]).length+' steps')),
               h('td',null,tcDefs.length>0?h('div',{style:{display:'flex',flexDirection:'column',gap:'4px'}},tcDefs.map(d=>h('div',{key:d.id,style:{display:'flex',alignItems:'center',gap:'4px',flexWrap:'wrap'}},
@@ -3443,7 +3688,8 @@ function TaskDetailPage({ navCtx, projects, tasks, testCases, setTestCases, defe
                 h('span',{className:'badge '+(d.status==='Closed'?'badge-green':d.status==='Open'?'badge-red':d.status==='Fixed'?'badge-cyan':d.status==='Re-Open'?'badge-pink':d.status==='Ready to Test'?'badge-purple':d.status==='Rejected'?'badge-gray':'badge-amber'),style:{fontSize:'10px',padding:'1px 6px'}},d.status)
               ))):h('span',{style:{color:'var(--text3)',fontSize:'12px'}},'—')),
               h('td',null,h('div',{style:{display:'flex',gap:'4px',flexWrap:'wrap'}},
-                h('button',{className:'btn btn-sm',onClick:()=>{setEditTC(tc);setShowTC(true);}},'ดู/แก้ไข'),
+                h('button',{className:'btn btn-sm',onClick:()=>{setEditTC(tc); isCustomMode?setShowCustomTC(true):setShowTC(true);}},'ดู/แก้ไข'),
+                canEdit&&h('button',{className:'btn btn-sm',style:{color:'var(--purple)',borderColor:'var(--purple)',background:'var(--purple-bg)'},title:'ย้าย TC ไป Task อื่น',onClick:()=>setMoveModal({tcIds:[tc.id]})},h(React.Fragment,null,h('span',{className:'ms ms-xs',style:{marginRight:'3px'}},'drive_file_move'),'ย้าย')),
                 canEdit&&h('button',{className:'btn btn-sm',style:{color:'var(--cyan)',borderColor:'var(--cyan)',background:'var(--cyan-bg)'},title:'Clone TC — reset Assignee, Status, Defect',onClick:()=>cloneTC(tc)},h(React.Fragment,null,h('span',{className:'ms ms-xs',style:{marginRight:'4px'}},'content_copy'),'Clone')),
                 canDelete&&h('button',{className:'btn btn-sm btn-danger',onClick:()=>setDelConfirm(tc)},'ลบ')
               ))
@@ -3472,6 +3718,58 @@ function TaskDetailPage({ navCtx, projects, tasks, testCases, setTestCases, defe
       )
     ),
     showTC&&h(TCModal,{tc:editTC,task,project,testCases,setTestCases,defects,setDefects,currentUser,users,canEdit,showToast,addLog,onClose:()=>setShowTC(false),navigate,openDefectModal}),
+    showCustomTC&&h(CustomTCModal,{tc:editTC,task,project,testCases,setTestCases,defects,setDefects,currentUser,users,canEdit,showToast,addLog,onClose:()=>setShowCustomTC(false),navigate,openDefectModal,USE_GAS}),
+    tcCommentPending&&ReactDOM.createPortal(
+      h('div',{className:'modal-overlay',style:{zIndex:10001},onClick:e=>{if(e.target.className==='modal-overlay'){setTcCommentPending(null);setTcCommentInput('');}}},
+        h('div',{className:'modal modal-sm'},
+          h('div',{className:'modal-header'},
+            h('span',{className:'modal-title',style:{display:'flex',alignItems:'center',gap:'8px'}},
+              h('span',{className:'ms ms-sm',style:{color:'var(--amber)'}},'comment'),
+              'บังคับ Comment — '+tcCommentPending.newStatus
+            ),
+            h('button',{className:'modal-close',onClick:()=>{setTcCommentPending(null);setTcCommentInput('');}},h('span',{className:'ms ms-sm'},'close'))
+          ),
+          h('div',{className:'modal-body'},
+            h('p',{style:{fontSize:'13px',color:'var(--text2)',marginBottom:'12px'}},
+              'TC: ',h('strong',{style:{color:'var(--text)'}},tcCommentPending.tc.title)
+            ),
+            h('div',{className:'form-group',style:{marginBottom:0}},
+              h('label',{className:'form-label'},'Comment ',h('span',{className:'req'},'*')),
+              h('textarea',{
+                className:'form-textarea',autoFocus:true,value:tcCommentInput,
+                onChange:e=>setTcCommentInput(e.target.value),
+                placeholder:'กรุณาใส่ Comment สำหรับสถานะนี้...',
+                style:{minHeight:'100px'}
+              })
+            )
+          ),
+          h('div',{className:'modal-footer'},
+            h('button',{className:'btn',onClick:()=>{setTcCommentPending(null);setTcCommentInput('');}}, 'ยกเลิก'),
+            h('button',{
+              className:'btn btn-primary',
+              disabled:!tcCommentInput.trim(),
+              onClick:()=>{
+                if(!tcCommentInput.trim()){showToast('กรุณาใส่ Comment','error');return;}
+                const {tc,newStatus}=tcCommentPending;
+                if(tc.id==='__bulk__'){
+                  const bulkIds=tc._bulkIds||[];
+                  setTestCases(p=>p.map(x=>bulkIds.includes(x.id)?{...x,status:newStatus,comment:tcCommentInput,updatedAt:now()}:x));
+                  addLog('Bulk Update','แก้ไข Status '+bulkIds.length+' TCs → '+newStatus);
+                  showToast(`อัพเดท Status ${bulkIds.length} รายการ`);
+                } else {
+                  setTestCases(p=>p.map(x=>x.id===tc.id?{...x,status:newStatus,comment:tcCommentInput,updatedAt:now()}:x));
+                  addLog('Update TC','แก้ไข Status: '+tc.title+' → '+newStatus);
+                  showToast('อัพเดทแล้ว');
+                }
+                setTcCommentPending(null);
+                setTcCommentInput('');
+              }
+            },'✓ บันทึก')
+          )
+        )
+      ),
+      document.getElementById('modal-root')
+    ),
     cloneRename&&ReactDOM.createPortal(
       h('div',{className:'modal-overlay',style:{zIndex:10000},onClick:e=>{if(e.target.className==='modal-overlay')setCloneRename(null);}},
         h('div',{className:'modal modal-sm'},
@@ -3500,7 +3798,188 @@ function TaskDetailPage({ navCtx, projects, tasks, testCases, setTestCases, defe
       ),
       document.getElementById('modal-root')
     ),
-    delConfirm&&h(ConfirmModal,{title:`ลบ TC "${delConfirm.title}"?`,message:'Test Case และ Defect ที่ผูกไว้ทั้งหมดจะถูกลบ',danger:true,onConfirm:()=>deleteTC(delConfirm),onClose:()=>setDelConfirm(null)})
+    delConfirm&&h(ConfirmModal,{title:`ลบ TC "${delConfirm.title}"?`,message:'Test Case และ Defect ที่ผูกไว้ทั้งหมดจะถูกลบ',danger:true,onConfirm:()=>deleteTC(delConfirm),onClose:()=>setDelConfirm(null)}),
+    moveModal&&ReactDOM.createPortal(
+      h(MoveTCModal,{tcIds:moveModal.tcIds,testCases,projects,tasks,currentTask:task,currentProject:project,onMove:moveTCs,onClose:()=>setMoveModal(null)}),
+      document.getElementById('modal-root')
+    )
+  );
+}
+
+// ─── MOVE TC MODAL ────────────────────────────────────────────────────────────
+function MoveTCModal({ tcIds, testCases, projects, tasks, currentTask, currentProject, onMove, onClose }) {
+  const tcsToMove = testCases.filter(tc => tcIds.includes(tc.id));
+  // เริ่มต้นที่ project ปัจจุบัน
+  const [selProjectId, setSelProjectId] = useState(currentProject.id);
+  const [selTaskId, setSelTaskId] = useState('');
+  const [tcSearch, setTcSearch] = useState('');
+  const [taskSearch, setTaskSearch] = useState('');
+
+  // tasks ใน project ที่เลือก (ยกเว้น task ปัจจุบัน)
+  const availableTasks = tasks.filter(t => t.projectId === selProjectId && t.id !== currentTask.id);
+  const filteredTasks = availableTasks.filter(t => !taskSearch || t.name.toLowerCase().includes(taskSearch.toLowerCase()));
+
+  const selProject = projects.find(p => p.id === selProjectId);
+  const selTask = tasks.find(t => t.id === selTaskId);
+
+  // จำนวน TC ใน task ปลายทาง (ข้อมูล preview)
+  const targetTaskTcCount = selTaskId ? testCases.filter(tc => tc.taskId === selTaskId).length : 0;
+
+  const filteredTcsToMove = tcsToMove.filter(tc => !tcSearch || tc.title.toLowerCase().includes(tcSearch.toLowerCase()));
+
+  const canConfirm = !!selTaskId;
+
+  return h('div',{className:'modal-overlay',onClick:e=>{if(e.target.className==='modal-overlay')onClose();}},
+    h('div',{className:'modal modal-sm',style:{maxWidth:'680px',height:'auto',maxHeight:'92vh',display:'flex',flexDirection:'column'}},
+      // ── Header ──
+      h('div',{className:'modal-header'},
+        h('span',{className:'modal-title',style:{display:'flex',alignItems:'center',gap:'8px'}},
+          h('span',{className:'ms ms-sm',style:{color:'var(--purple)'}},'drive_file_move'),
+          `ย้าย ${tcIds.length} Test Case${tcIds.length>1?'s':''}`
+        ),
+        h('button',{className:'modal-close',onClick:onClose},h('span',{className:'ms ms-sm'},'close'))
+      ),
+      // ── Body ──
+      h('div',{className:'modal-body',style:{display:'flex',flexDirection:'column',gap:'16px',overflowY:'auto'}},
+
+        // ── FROM (read-only info) ──
+        h('div',{style:{background:'var(--bg)',border:'1px solid var(--border)',borderRadius:'var(--r)',padding:'10px 14px',fontSize:'13px'}},
+          h('div',{style:{display:'flex',alignItems:'center',gap:'6px',color:'var(--text3)',fontSize:'11px',marginBottom:'4px',textTransform:'uppercase',letterSpacing:'0.5px'}},'จาก'),
+          h('div',{style:{display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap'}},
+            h('span',{style:{display:'inline-flex',alignItems:'center',gap:'4px',background:'var(--bg3)',padding:'3px 10px',borderRadius:'20px',fontSize:'12px',color:'var(--text2)'}},
+              h('span',{className:'ms ms-xs',style:{color:'var(--amber)'}},'folder'),currentProject.name
+            ),
+            h('span',{className:'ms ms-xs',style:{color:'var(--text3)'}},'chevron_right'),
+            h('span',{style:{display:'inline-flex',alignItems:'center',gap:'4px',background:'var(--bg3)',padding:'3px 10px',borderRadius:'20px',fontSize:'12px',color:'var(--text2)'}},
+              h('span',{className:'ms ms-xs',style:{color:'var(--accent)'}},'task_alt'),currentTask.name
+            )
+          )
+        ),
+
+        // ── TO: เลือก Project ──
+        h('div',{className:'form-group',style:{marginBottom:0}},
+          h('label',{className:'form-label',style:{display:'flex',alignItems:'center',gap:'6px'}},
+            h('span',{className:'ms ms-xs',style:{color:'var(--purple)'}},'folder_open'),'Project ปลายทาง ',h('span',{className:'req'},'*')
+          ),
+          h('div',{style:{display:'flex',flexWrap:'wrap',gap:'6px',maxHeight:'130px',overflowY:'auto',padding:'2px 0'}},
+            projects.map(p =>
+              h('div',{
+                key:p.id,
+                onClick:()=>{ setSelProjectId(p.id); setSelTaskId(''); setTaskSearch(''); },
+                style:{
+                  display:'inline-flex',alignItems:'center',gap:'6px',padding:'6px 12px',borderRadius:'var(--r)',
+                  border:`1px solid ${selProjectId===p.id?'var(--purple)':'var(--border)'}`,
+                  background: selProjectId===p.id?'var(--purple-bg)':'var(--bg3)',
+                  cursor:'pointer',fontSize:'13px',fontWeight:selProjectId===p.id?'600':'400',
+                  color: selProjectId===p.id?'var(--purple)':'var(--text2)',
+                  transition:'all 0.12s'
+                }
+              },
+                h('span',{className:'ms ms-xs',style:{color:selProjectId===p.id?'var(--purple)':'var(--text3)'}},'folder'),
+                p.name,
+                p.id===currentProject.id&&h('span',{style:{fontSize:'10px',color:'var(--text3)',fontWeight:'400'}},' (ปัจจุบัน)')
+              )
+            )
+          )
+        ),
+
+        // ── TO: เลือก Task ──
+        h('div',{className:'form-group',style:{marginBottom:0}},
+          h('label',{className:'form-label',style:{display:'flex',alignItems:'center',gap:'6px'}},
+            h('span',{className:'ms ms-xs',style:{color:'var(--purple)'}},'task_alt'),'Task ปลายทาง ',h('span',{className:'req'},'*')
+          ),
+          availableTasks.length===0
+            ? h('div',{style:{padding:'12px',background:'var(--bg)',border:'1px solid var(--border)',borderRadius:'var(--r)',color:'var(--text3)',fontSize:'13px',textAlign:'center'}},
+                selProjectId===currentProject.id?'ไม่มี Task อื่นใน Project นี้':'ยังไม่มี Task ใน Project ที่เลือก'
+              )
+            : h('div',null,
+                availableTasks.length>4&&h('input',{
+                  className:'search-input',style:{marginBottom:'8px'},
+                  placeholder:'ค้นหา Task...',value:taskSearch,
+                  onChange:e=>setTaskSearch(e.target.value)
+                }),
+                h('div',{style:{display:'flex',flexDirection:'column',gap:'4px',maxHeight:'180px',overflowY:'auto'}},
+                  filteredTasks.map(t => {
+                    const tcCount = testCases.filter(tc => tc.taskId === t.id).length;
+                    return h('div',{
+                      key:t.id,
+                      onClick:()=>setSelTaskId(t.id),
+                      style:{
+                        display:'flex',alignItems:'center',justifyContent:'space-between',
+                        padding:'8px 12px',borderRadius:'var(--r)',cursor:'pointer',
+                        border:`1px solid ${selTaskId===t.id?'var(--purple)':'var(--border)'}`,
+                        background: selTaskId===t.id?'var(--purple-bg)':'var(--bg)',
+                        transition:'all 0.12s'
+                      }
+                    },
+                      h('div',{style:{display:'flex',alignItems:'center',gap:'8px'}},
+                        h('div',{style:{
+                          width:'18px',height:'18px',borderRadius:'50%',border:`2px solid ${selTaskId===t.id?'var(--purple)':'var(--border2)'}`,
+                          display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,
+                          background: selTaskId===t.id?'var(--purple)':'transparent',transition:'all 0.12s'
+                        }},
+                          selTaskId===t.id&&h('span',{style:{fontSize:'10px',color:'white',lineHeight:1}},'✓')
+                        ),
+                        h('span',{style:{fontSize:'13px',fontWeight:selTaskId===t.id?'600':'400',color:selTaskId===t.id?'var(--purple)':'var(--text)'}},t.name)
+                      ),
+                      h('span',{style:{fontSize:'11px',color:'var(--text3)',flexShrink:0}},tcCount,' TCs')
+                    );
+                  })
+                )
+              )
+        ),
+
+        // ── Preview: TC ที่จะย้าย ──
+        h('div',{className:'form-group',style:{marginBottom:0}},
+          h('label',{className:'form-label',style:{display:'flex',alignItems:'center',gap:'6px'}},
+            h('span',{className:'ms ms-xs',style:{color:'var(--cyan)'}},'checklist'),'Test Cases ที่จะย้าย',
+            h('span',{style:{color:'var(--text3)',fontWeight:'400',fontSize:'11px',marginLeft:'4px'}},`(${tcIds.length} รายการ)`)
+          ),
+          tcIds.length>4&&h('input',{
+            className:'search-input',style:{marginBottom:'8px'},
+            placeholder:'ค้นหา TC...',value:tcSearch,
+            onChange:e=>setTcSearch(e.target.value)
+          }),
+          h('div',{style:{border:'1px solid var(--border)',borderRadius:'var(--r)',background:'var(--bg)',maxHeight:'160px',overflowY:'auto'}},
+            filteredTcsToMove.map((tc,i)=>
+              h('div',{key:tc.id,style:{
+                display:'flex',alignItems:'center',gap:'8px',padding:'7px 12px',
+                borderBottom: i<filteredTcsToMove.length-1?'1px solid var(--border)':'none',fontSize:'13px'
+              }},
+                h('span',{className:'ms ms-xs',style:{color:'var(--cyan)',flexShrink:0}},'check_circle'),
+                h('span',{style:{flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}},tc.title),
+                h('span',{style:{fontSize:'11px',color:'var(--text3)',flexShrink:0}},tc.priority,' • ',tc.status)
+              )
+            )
+          )
+        ),
+
+        // ── Summary arrow ──
+        selTaskId&&h('div',{style:{display:'flex',alignItems:'center',justifyContent:'center',gap:'10px',padding:'10px 14px',background:'var(--purple-bg)',border:'1px solid var(--purple)',borderRadius:'var(--r)',fontSize:'13px'}},
+          h('span',{style:{color:'var(--text2)',fontWeight:'500'}},currentTask.name),
+          h('span',{className:'ms',style:{color:'var(--purple)',fontSize:'22px'}},'arrow_forward'),
+          h('div',{style:{textAlign:'center'}},
+            h('div',{style:{color:'var(--purple)',fontWeight:'600'}},selTask?.name),
+            h('div',{style:{fontSize:'11px',color:'var(--text3)',marginTop:'2px'}},selProject?.name,' • ',targetTaskTcCount,' TCs อยู่แล้ว → จะเป็น ',targetTaskTcCount+tcIds.length,' TCs')
+          )
+        )
+      ),
+      // ── Footer ──
+      h('div',{className:'modal-footer'},
+        h('button',{className:'btn',onClick:onClose},'ยกเลิก'),
+        h('button',{
+          className:'btn btn-primary',
+          style:{background:'var(--purple)',borderColor:'var(--purple)',opacity:canConfirm?1:0.5},
+          disabled:!canConfirm,
+          onClick:()=>onMove(tcIds,selTaskId)
+        },
+          h(React.Fragment,null,
+            h('span',{className:'ms ms-sm',style:{marginRight:'5px'}},'drive_file_move'),
+            `ย้าย ${tcIds.length} TC${tcIds.length>1?'s':''}`
+          )
+        )
+      )
+    )
   );
 }
 
@@ -3588,11 +4067,13 @@ function TitleTemplateDropdown({ onInsert }) {
 function TCModal({ tc, task, project, testCases, setTestCases, defects, setDefects, currentUser, users, canEdit, showToast, addLog, onClose, navigate, openDefectModal }) {
   const isEdit = !!tc;
   const SCENARIO_TEMPLATE = 'Scenario Description\n* อธิบายรายละเอียด\n\nPrerequisite\n1. Existing Customer\n2. ข้อมูลเพิ่มก่อนทดสอบ\n3. ข้อมูลเพิ่มก่อนทดสอบ\n\nPre steps\n1. Log in URL : ใส่ URL สำหรับทดสอบ\n2. ขั้นตอนการทดสอบ\n   * Step 1\n   * Step 2\n   * Step 3\n3. ขั้นตอนการทดสอบเพิ่มเติม\n   * Step 1';
-  const blank = { title:'', priority:'Medium', detection:'Positive', status:'Not Start', scenarioDescription:'', tags:'', testData:'', comment:'', assignee:'', steps:[{id:uid(),action:'',expected:'',actual:'',files:[]}], files:[] };
+  const blank = { title:'', priority:'Medium', detection:'Positive', status:'Not Start', scenarioDescription:'', tags:'', testData:'', comment:'', assignee:'', customField1:'', customField2:'', customField3:'', customField4:'', customField5:'', steps:[{id:uid(),action:'',expected:'',actual:'',files:[]}], files:[] };
   const [form, setForm] = useState(isEdit ? {...blank,...tc, steps:(tc.steps&&tc.steps.length?tc.steps:[{id:uid(),action:'',expected:'',actual:'',files:[]}])} : blank);
   const [dirty, setDirty] = useState(false);
   const [showConfirm, setShowConfirm] = useState(null);
   const [activeTab, setActiveTab] = useState('info');
+  const [commentError, setCommentError] = useState(false);
+  const commentRef = useRef(null);
 
   const set = (k,v) => { setForm(p=>({...p,[k]:v})); setDirty(true); };
   const setStep = (i,k,v) => { const steps=[...form.steps]; steps[i]={...steps[i],[k]:v}; setForm(p=>({...p,steps})); setDirty(true); };
@@ -3634,7 +4115,14 @@ function TCModal({ tc, task, project, testCases, setTestCases, defects, setDefec
 
   const save = () => {
     if (!form.title.trim()) { showToast('กรุณาใส่ Title','error'); return; }
-    if (form.status==='Pass with Comment' && !form.comment.trim()) { showToast('Pass with Comment ต้องใส่ Comment','error'); return; }
+    if (['Pass with Comment','Cancelled','Deferred'].includes(form.status) && !form.comment.trim()) {
+      setCommentError(true);
+      setActiveTab('info');
+      showToast(form.status+' ต้องใส่ Comment ก่อนบันทึก','error');
+      setTimeout(()=>{ if(commentRef.current){ commentRef.current.scrollIntoView({behavior:'smooth',block:'center'}); commentRef.current.focus(); } },100);
+      return;
+    }
+    setCommentError(false);
     if (isEdit) {
       const old = testCases.find(x=>x.id===tc.id);
       const changes = [];
@@ -3652,7 +4140,7 @@ function TCModal({ tc, task, project, testCases, setTestCases, defects, setDefec
     onClose();
   };
 
-  const tcDefects = isEdit ? defects.filter(d=>(d.relatedTcIds&&d.relatedTcIds.includes(tc?.id))||(!d.relatedTcIds&&d.testCaseId===tc?.id)) : [];
+  const tcDefects = isEdit ? defects.filter(d=>toArr(d.relatedTcIds).includes(tc?.id)||(toArr(d.relatedTcIds).length===0&&d.testCaseId===tc?.id)) : [];
 
   const FileList = ({ files, onAdd, onDel }) => h('div',null,
     (files||[]).map(f=>h('div',{key:f.id,className:'file-item'},
@@ -3697,7 +4185,7 @@ function TCModal({ tc, task, project, testCases, setTestCases, defects, setDefec
           ),
           h('div',{className:'form-row3'},
             h('div',{className:'form-group'},h('label',{className:'form-label'},'Detection'),h('select',{className:'form-select',value:form.detection,onChange:e=>set('detection',e.target.value),disabled:!canEdit},detectionOpts.map(o=>h('option',{key:o,value:o},o)))),
-            h('div',{className:'form-group'},h('label',{className:'form-label'},'Status'),h('select',{className:'form-select',value:form.status,onChange:e=>set('status',e.target.value),disabled:!canEdit},statusOpts.map(o=>h('option',{key:o,value:o},o)))),
+            h('div',{className:'form-group'},h('label',{className:'form-label'},'Status'),h('select',{className:'form-select',value:form.status,onChange:e=>{ set('status',e.target.value); setCommentError(false); },disabled:!canEdit},statusOpts.map(o=>h('option',{key:o,value:o},o)))),
             h('div',{className:'form-group'},h('label',{className:'form-label'},'Test Data'),h('input',{className:'form-input',value:form.testData,onChange:e=>set('testData',e.target.value),readOnly:!canEdit}))
           ),
           h('div',{className:'form-row'},
@@ -3717,9 +4205,16 @@ function TCModal({ tc, task, project, testCases, setTestCases, defects, setDefec
               )
             )
           ),
-          form.status==='Pass with Comment'&&h('div',{className:'form-group'},
-            h('label',{className:'form-label'},'Comment ',h('span',{className:'req'},'*')),
-            h('textarea',{className:'form-textarea',value:form.comment,onChange:e=>set('comment',e.target.value),placeholder:'กรุณาใส่ Comment...',readOnly:!canEdit})
+          ['Pass with Comment','Cancelled','Deferred'].includes(form.status)&&h('div',{className:'form-group'},
+            h('label',{className:'form-label',style:commentError?{color:'var(--red)'}:{}},'Comment ',h('span',{className:'req'},'*'),
+              commentError&&h('span',{style:{fontSize:'11px',color:'var(--red)',marginLeft:'8px',fontWeight:'400'}},'⚠ กรุณาใส่ Comment ก่อนบันทึก')
+            ),
+            h('textarea',{ref:commentRef,className:'form-textarea',value:form.comment,
+              onChange:e=>{ set('comment',e.target.value); if(e.target.value.trim()) setCommentError(false); },
+              placeholder:form.status==='Cancelled'?'กรุณาระบุเหตุผลที่ยกเลิก...':form.status==='Deferred'?'กรุณาระบุเหตุผลที่เลื่อน...':'กรุณาใส่ Comment...',
+              readOnly:!canEdit,
+              style:commentError?{border:'2px solid var(--red)',background:'var(--red-bg)',boxShadow:'0 0 0 3px rgba(229,9,20,0.15)'}:{}
+            })
           ),
           form.status==='Failed'&&h('div',{className:'confirm-box',style:{marginBottom:'12px'}},
             h('p',{style:{color:'var(--amber)',fontSize:'12px',fontWeight:'500'}},'TC นี้ Failed — โปรดผูก Defect ในแท็บ Defects')
@@ -3747,7 +4242,41 @@ function TCModal({ tc, task, project, testCases, setTestCases, defects, setDefec
             ),
             h('input',{className:'form-input',value:form.tags,onChange:e=>set('tags',e.target.value),placeholder:'คั่นด้วย comma เช่น ENV, PROJECT, TASK',readOnly:!canEdit})
           ),
-          form.tags&&h('div',{style:{marginTop:'4px'}},form.tags.split(',').map(t=>t.trim()).filter(Boolean).map(t=>h('span',{key:t,className:'tag'},t)))
+          form.tags&&h('div',{style:{marginTop:'4px'}},form.tags.split(',').map(t=>t.trim()).filter(Boolean).map(t=>h('span',{key:t,className:'tag'},t))),
+          // ── Custom Fields 1–5 (เพิ่ม input data อิสระ 5 ช่อง) ──
+          h('div',{style:{borderTop:'1px solid var(--border)',paddingTop:'12px',marginTop:'4px'}},
+            h('div',{style:{display:'flex',alignItems:'center',gap:'6px',marginBottom:'10px',fontSize:'12px',color:'var(--purple)'}},
+              h('span',{className:'ms ms-xs'},'add_box'),
+              h('span',null,'Custom Input Fields')
+            ),
+            // Row CF 1-2
+            h('div',{className:'form-row'},
+              h('div',{className:'form-group'},
+                h(EditableLabel,{fieldKey:'customField1'}),
+                h('input',{className:'form-input',value:form.customField1||'',onChange:e=>set('customField1',e.target.value),readOnly:!canEdit,placeholder:`ใส่ข้อมูล ${labels.customField1}`})
+              ),
+              h('div',{className:'form-group'},
+                h(EditableLabel,{fieldKey:'customField2'}),
+                h('input',{className:'form-input',value:form.customField2||'',onChange:e=>set('customField2',e.target.value),readOnly:!canEdit,placeholder:`ใส่ข้อมูล ${labels.customField2}`})
+              )
+            ),
+            // Row CF 3-4
+            h('div',{className:'form-row'},
+              h('div',{className:'form-group'},
+                h(EditableLabel,{fieldKey:'customField3'}),
+                h('input',{className:'form-input',value:form.customField3||'',onChange:e=>set('customField3',e.target.value),readOnly:!canEdit,placeholder:`ใส่ข้อมูล ${labels.customField3}`})
+              ),
+              h('div',{className:'form-group'},
+                h(EditableLabel,{fieldKey:'customField4'}),
+                h('input',{className:'form-input',value:form.customField4||'',onChange:e=>set('customField4',e.target.value),readOnly:!canEdit,placeholder:`ใส่ข้อมูล ${labels.customField4}`})
+              )
+            ),
+            // Row CF 5 (full width)
+            h('div',{className:'form-group'},
+              h(EditableLabel,{fieldKey:'customField5'}),
+              h('input',{className:'form-input',value:form.customField5||'',onChange:e=>set('customField5',e.target.value),readOnly:!canEdit,placeholder:`ใส่ข้อมูล ${labels.customField5}`})
+            )
+          )
         ),
         activeTab==='steps'&&h('div',null,
           h('div',{className:'section-title',style:{marginBottom:'12px'}},'Test Steps'),
@@ -3810,9 +4339,366 @@ function TCModal({ tc, task, project, testCases, setTestCases, defects, setDefec
   );
   return ReactDOM.createPortal(_portalEl, document.getElementById('modal-root'));
 }
+// ─── CUSTOM TC MODAL ──────────────────────────────────────────────────────────
+// เหมือน TCModal แต่ชื่อ label/หัวข้อในส่วน "ข้อมูลหลัก" แก้ไขได้ทั้งหมด
+// label config เก็บไว้ใน localStorage ต่อ project เพื่อ persist
+function CustomTCModal({ tc, task, project, testCases, setTestCases, defects, setDefects, currentUser, users, canEdit, showToast, addLog, onClose, navigate, openDefectModal, USE_GAS }) {
+  const isEdit = !!tc;
+  const LABEL_KEY = `qah_custom_labels_${project?.id || 'default'}`;
+  const DEFAULT_LABELS = {
+    title: 'Title',
+    priority: 'Priority',
+    detection: 'Detection',
+    status: 'Status',
+    testData: 'Test Data',
+    assignee: 'Assignee',
+    scenarioDescription: 'Scenario Description',
+    tags: 'Tags / Labels',
+    customField1: 'Custom Field 1',
+    customField2: 'Custom Field 2',
+    customField3: 'Custom Field 3',
+    customField4: 'Custom Field 4',
+    customField5: 'Custom Field 5',
+  };
+
+  const loadLabels = () => {
+    try { const v = localStorage.getItem(LABEL_KEY); return v ? { ...DEFAULT_LABELS, ...JSON.parse(v) } : { ...DEFAULT_LABELS }; }
+    catch { return { ...DEFAULT_LABELS }; }
+  };
+  const saveLabels = (labels) => {
+    try { localStorage.setItem(LABEL_KEY, JSON.stringify(labels)); } catch {}
+  };
+
+  const [labels, setLabels] = useState(loadLabels);
+  const [editingLabel, setEditingLabel] = useState(null); // key ที่กำลังแก้ไข
+
+  const updateLabel = (key, val) => {
+    const next = { ...labels, [key]: val || DEFAULT_LABELS[key] };
+    setLabels(next);
+    saveLabels(next);
+    // ── อัปเดต header ของ Custom TC Sheet เมื่อเปลี่ยนชื่อ label ──
+    if (USE_GAS) {
+      api.write({ action:'updateCustomProjectSheetHeaders', projectId:project?.id, customLabels:next })
+        .catch(e => console.warn('[QAHUBs] updateCustomProjectSheetHeaders failed:', e.message));
+    }
+  };
+
+  // EditableLabel component สำหรับ form-label แก้ไขได้
+  const EditableLabel = ({ fieldKey, req }) => {
+    const [localVal, setLocalVal] = useState(labels[fieldKey]);
+    return h('div', { style:{display:'flex',alignItems:'center',gap:'4px',marginBottom:'6px',flexWrap:'wrap'} },
+      editingLabel === fieldKey
+        ? h(React.Fragment, null,
+            h('input', {
+              style:{
+                background:'var(--bg3)',border:'1px solid var(--purple)',borderRadius:'3px',
+                color:'var(--purple)',fontSize:'12px',fontWeight:'500',fontFamily:'var(--font)',
+                outline:'none',padding:'2px 6px',minWidth:'80px',maxWidth:'160px'
+              },
+              value: localVal,
+              autoFocus: true,
+              onChange: e => setLocalVal(e.target.value),
+              onBlur: () => { updateLabel(fieldKey, localVal); setEditingLabel(null); },
+              onKeyDown: e => { if(e.key==='Enter'||e.key==='Escape'){ updateLabel(fieldKey, localVal); setEditingLabel(null); } }
+            }),
+            h('span',{style:{fontSize:'10px',color:'var(--text3)'}},'Enter เพื่อบันทึก')
+          )
+        : h(React.Fragment, null,
+            h('span', {
+              className:'form-label',
+              style:{margin:0,cursor:'pointer',color:'var(--purple)',borderBottom:'1px dashed var(--purple)',paddingBottom:'1px'},
+              title:'คลิกเพื่อแก้ไขชื่อ field',
+              onClick: canEdit ? () => { setLocalVal(labels[fieldKey]); setEditingLabel(fieldKey); } : undefined,
+            }, labels[fieldKey]),
+            req && h('span',{className:'req',style:{marginLeft:'2px'}},'*'),
+            canEdit && h('span', {
+              className:'ms ms-xs',
+              style:{color:'var(--purple)',opacity:0.6,cursor:'pointer',marginLeft:'2px',fontSize:'12px'},
+              title:'แก้ไขชื่อ field',
+              onClick: () => { setLocalVal(labels[fieldKey]); setEditingLabel(fieldKey); }
+            }, 'edit')
+          )
+    );
+  };
+
+  const SCENARIO_TEMPLATE = 'Scenario Description\n* อธิบายรายละเอียด\n\nPrerequisite\n1. Existing Customer\n2. ข้อมูลเพิ่มก่อนทดสอบ\n\nPre steps\n1. Log in URL : ใส่ URL\n2. ขั้นตอนการทดสอบ';
+  const blank = { title:'', priority:'Medium', detection:'Positive', status:'Not Start', scenarioDescription:'', tags:'', testData:'', comment:'', assignee:'', steps:[{id:uid(),action:'',expected:'',actual:'',files:[]}], files:[] };
+  const [form, setForm] = useState(isEdit ? {...blank,...tc, steps:(tc.steps&&tc.steps.length?tc.steps:[{id:uid(),action:'',expected:'',actual:'',files:[]}])} : blank);
+  const [dirty, setDirty] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(null);
+  const [activeTab, setActiveTab] = useState('info');
+  const [commentError, setCommentError] = useState(false);
+  const commentRef = useRef(null);
+
+  const set = (k,v) => { setForm(p=>({...p,[k]:v})); setDirty(true); };
+  const setStep = (i,k,v) => { const steps=[...form.steps]; steps[i]={...steps[i],[k]:v}; setForm(p=>({...p,steps})); setDirty(true); };
+  const addStep = () => { setForm(p=>({...p,steps:[...p.steps,{id:uid(),action:'',expected:'',actual:'',files:[]}]})); setDirty(true); };
+  const removeStep = (i) => { const steps=form.steps.filter((_,idx)=>idx!==i); setForm(p=>({...p,steps})); setDirty(true); };
+  const handleClose = () => { if(dirty) setShowConfirm('close'); else onClose(); };
+
+  const handleFile = (e, stepIdx) => {
+    const files = Array.from(e.target.files);
+    files.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const fileId = uid();
+        cacheFileData(fileId, ev.target.result);
+        const fobj = { id:fileId, name:file.name, size:file.size, type:file.type, data:ev.target.result };
+        if (stepIdx >= 0) {
+          const steps=[...form.steps]; steps[stepIdx]={...steps[stepIdx], files:[...(steps[stepIdx].files||[]),fobj]};
+          setForm(p=>({...p,steps})); setDirty(true);
+        } else {
+          setForm(p=>({...p,files:[...(p.files||[]),fobj]})); setDirty(true);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value='';
+  };
+
+  const downloadFile = (f) => {
+    const dataUrl = f.data || getCachedFileData(f.id);
+    if (!dataUrl) { showToast('ไม่พบข้อมูลไฟล์ในเครื่องนี้','error'); return; }
+    const a = document.createElement('a'); a.href=dataUrl; a.download=f.name; a.click();
+  };
+
+  const save = () => {
+    if (!form.title.trim()) { showToast(`กรุณาใส่ ${labels.title}`,'error'); return; }
+    if (['Pass with Comment','Cancelled','Deferred'].includes(form.status) && !form.comment.trim()) {
+      setCommentError(true);
+      setActiveTab('info');
+      showToast(form.status+' ต้องใส่ Comment ก่อนบันทึก','error');
+      setTimeout(()=>{ if(commentRef.current){ commentRef.current.scrollIntoView({behavior:'smooth',block:'center'}); commentRef.current.focus(); } },100);
+      return;
+    }
+    setCommentError(false);
+    // บันทึก custom labels ไว้ใน TC record ด้วยเพื่อให้ Google Sheet รู้ว่าใช้ label อะไร
+    const customLabels = labels;
+    if (isEdit) {
+      const updated = {...tc,...form,customLabels,updatedAt:now(),updatedBy:currentUser.id};
+      setTestCases(p=>p.map(x=>x.id===tc.id?updated:x));
+      addLog('Update Custom TC', `แก้ไข TC: ${form.title}`);
+      showToast('อัพเดท Test Case สำเร็จ');
+      // ── sync row เข้า Custom TC Sheet ──
+      if (USE_GAS) {
+        api.write({ action:'syncCustomTCRow', projectId:project?.id, projectName:project?.name, data:updated, customLabels })
+          .catch(e => console.warn('[QAHUBs] syncCustomTCRow failed:', e.message));
+      }
+    } else {
+      const ntc = { id:uid(), taskId:task.id, projectId:project.id, createdBy:currentUser.id, createdAt:now(), customLabels, ...form };
+      setTestCases(p=>[...p,ntc]);
+      addLog('Create Custom TC', `สร้าง Custom TC: ${form.title} ใน Task: ${task.name}`);
+      showToast('สร้าง Custom Test Case สำเร็จ');
+      // ── sync row ใหม่เข้า Custom TC Sheet ──
+      if (USE_GAS) {
+        api.write({ action:'syncCustomTCRow', projectId:project?.id, projectName:project?.name, data:ntc, customLabels })
+          .catch(e => console.warn('[QAHUBs] syncCustomTCRow failed:', e.message));
+      }
+    }
+    onClose();
+  };
+
+  const tcDefects = isEdit ? defects.filter(d=>toArr(d.relatedTcIds).includes(tc?.id)||(toArr(d.relatedTcIds).length===0&&d.testCaseId===tc?.id)) : [];
+
+  const FileList = ({ files, onAdd, onDel }) => h('div',null,
+    (files||[]).map(f=>h('div',{key:f.id,className:'file-item'},
+      h('span',{className:'file-icon'},f.type?.startsWith('image/') ? h('span',{className:'ms ms-sm'},'image') : h('span',{className:'ms ms-sm'},'description')),
+      h('span',{className:'file-name',style:{cursor:'pointer',color:'var(--accent)'},onClick:()=>downloadFile(f)},f.name),
+      h('span',{className:'file-size'},Math.round(f.size/1024)+'KB'),
+      canEdit&&h('button',{className:'btn-icon',style:{marginLeft:'auto'},onClick:()=>onDel(f.id)},h('span',{className:'ms ms-sm'},'close'))
+    )),
+    canEdit&&h('label',{className:'file-drop',style:{marginTop:'6px',padding:'12px',cursor:'pointer'}},
+      h('input',{type:'file',multiple:true,accept:'image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx',onChange:onAdd}),
+      '+ เพิ่มไฟล์ / รูป / วีดีโอ'
+    )
+  );
+
+  const _portalEl = h('div',{className:'modal-overlay',onClick:e=>{if(e.target.className==='modal-overlay')handleClose();}},
+    h('div',{className:'modal modal-lg'},
+      h('div',{className:'modal-header'},
+        h('div',{style:{display:'flex',alignItems:'center',gap:'10px'}},
+          h('span',{className:'modal-title'},isEdit?`แก้ไข: ${tc.title}`:'สร้าง Custom Test Case'),
+          h('span',{className:'custom-badge'},h('span',{className:'ms ms-xs',style:{marginRight:'2px'}},'tune'),'Custom TC')
+        ),
+        h('div',{style:{display:'flex',gap:'8px',alignItems:'center'}},
+          isEdit&&h('button',{className:'btn-icon',title:'คัดลอก URL',style:{padding:'5px 7px',opacity:'0.7'},onClick:()=>copyText(shortUrl('tc',tc.id),showToast)},h('span',{className:'ms ms-sm'},'content_copy')),
+          h('button',{className:'modal-close',onClick:handleClose},h('span',{className:'ms ms-sm'},'close'))
+        )
+      ),
+      h('div',{className:'tabs',style:{padding:'0 24px',margin:'0'}},
+        [['info','ข้อมูลหลัก'],['steps','Test Steps'],['files','Files'],['defects','Defects'],['history','History']].map(([t,l])=>h('div',{key:t,className:`tab${activeTab===t?' active':''}`,onClick:()=>setActiveTab(t)},l))
+      ),
+      h('div',{className:'modal-body'},
+        activeTab==='info'&&h('div',{style:{display:'flex',flexDirection:'column',height:'100%'}},
+          // Info bar
+          h('div',{style:{display:'flex',alignItems:'center',gap:'6px',padding:'8px 12px',background:'var(--purple-bg)',border:'1px solid var(--purple)',borderRadius:'var(--r)',marginBottom:'14px',fontSize:'12px',color:'var(--purple)'}},
+            h('span',{className:'ms ms-xs'},'tune'),
+            h('span',null,'Custom Mode — คลิกที่ชื่อ field '),
+            h('span',{className:'ms ms-xs'},'edit'),
+            h('span',null,' เพื่อเปลี่ยนชื่อ label ได้ทุก field')
+          ),
+          // Title
+          h('div',{className:'form-group'},
+            h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'0'}},
+              h(EditableLabel,{fieldKey:'title',req:true}),
+              canEdit&&h(TitleTemplateDropdown,{onInsert:tpl=>set('title',tpl)})
+            ),
+            h('input',{className:'form-input',value:form.title,onChange:e=>set('title',e.target.value),readOnly:!canEdit})
+          ),
+          // Row 1: Project(readonly), Task(readonly), Priority(editable label)
+          h('div',{className:'form-row3'},
+            h('div',{className:'form-group'},
+              h('label',{className:'form-label'},'Project'),
+              h('input',{className:'form-input',value:project.name,readOnly:true,style:{opacity:0.7}})
+            ),
+            h('div',{className:'form-group'},
+              h('label',{className:'form-label'},'Task'),
+              h('input',{className:'form-input',value:task.name,readOnly:true,style:{opacity:0.7}})
+            ),
+            h('div',{className:'form-group'},
+              h(EditableLabel,{fieldKey:'priority'}),
+              h('select',{className:'form-select',value:form.priority,onChange:e=>set('priority',e.target.value),disabled:!canEdit},priorityOpts.map(o=>h('option',{key:o,value:o},o)))
+            )
+          ),
+          // Row 2: Detection, Status, TestData — all editable labels
+          h('div',{className:'form-row3'},
+            h('div',{className:'form-group'},
+              h(EditableLabel,{fieldKey:'detection'}),
+              h('select',{className:'form-select',value:form.detection,onChange:e=>set('detection',e.target.value),disabled:!canEdit},detectionOpts.map(o=>h('option',{key:o,value:o},o)))
+            ),
+            h('div',{className:'form-group'},
+              h(EditableLabel,{fieldKey:'status'}),
+              h('select',{className:'form-select',value:form.status,onChange:e=>{ set('status',e.target.value); setCommentError(false); },disabled:!canEdit},statusOpts.map(o=>h('option',{key:o,value:o},o)))
+            ),
+            h('div',{className:'form-group'},
+              h(EditableLabel,{fieldKey:'testData'}),
+              h('input',{className:'form-input',value:form.testData,onChange:e=>set('testData',e.target.value),readOnly:!canEdit})
+            )
+          ),
+          // Row 3: Assignee, Created by
+          h('div',{className:'form-row'},
+            h('div',{className:'form-group'},
+              h(EditableLabel,{fieldKey:'assignee'}),
+              h('select',{className:'form-select',value:form.assignee||'',onChange:e=>set('assignee',e.target.value),disabled:!canEdit},
+                h('option',{value:''},'— ยังไม่ได้มอบหมาย —'),
+                (users||[]).map(u=>h('option',{key:u.id,value:u.id},u.name))
+              )
+            ),
+            isEdit&&h('div',{className:'form-group'},
+              h('label',{className:'form-label'},'Created by'),
+              h('div',{style:{display:'flex',alignItems:'center',gap:'8px',padding:'8px 12px',background:'var(--bg)',border:'1px solid var(--border2)',borderRadius:'var(--r)',fontSize:'13px'}},
+                h('div',{className:'avatar',style:{width:'22px',height:'22px',fontSize:'10px',background:((users||[]).find(u=>u.id===tc.createdBy)?.color||'var(--accent)')+'22',color:(users||[]).find(u=>u.id===tc.createdBy)?.color||'var(--accent)'}},(((users||[]).find(u=>u.id===tc.createdBy)?.name)||'?')[0]),
+                h('span',{style:{fontWeight:'500'}},(users||[]).find(u=>u.id===tc.createdBy)?.name||tc.createdBy||'—'),
+                h('span',{style:{color:'var(--text3)',fontSize:'11px',marginLeft:'auto'}},fmtDate(tc.createdAt))
+              )
+            )
+          ),
+          // Comment (required for some statuses)
+          ['Pass with Comment','Cancelled','Deferred'].includes(form.status)&&h('div',{className:'form-group'},
+            h('label',{className:'form-label',style:commentError?{color:'var(--red)'}:{}},'Comment ',h('span',{className:'req'},'*'),
+              commentError&&h('span',{style:{fontSize:'11px',color:'var(--red)',marginLeft:'8px',fontWeight:'400'}},'⚠ กรุณาใส่ Comment ก่อนบันทึก')
+            ),
+            h('textarea',{ref:commentRef,className:'form-textarea',value:form.comment,
+              onChange:e=>{ set('comment',e.target.value); if(e.target.value.trim()) setCommentError(false); },
+              readOnly:!canEdit,
+              style:commentError?{border:'2px solid var(--red)',background:'var(--red-bg)'}:{}
+            })
+          ),
+          form.status==='Failed'&&h('div',{className:'confirm-box',style:{marginBottom:'12px'}},
+            h('p',{style:{color:'var(--amber)',fontSize:'12px',fontWeight:'500'}},'TC นี้ Failed — โปรดผูก Defect ในแท็บ Defects')
+          ),
+          // Scenario Description — editable label
+          h('div',{className:'form-group',style:{flex:'1',display:'flex',flexDirection:'column',marginBottom:'8px'}},
+            h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'0'}},
+              h(EditableLabel,{fieldKey:'scenarioDescription'}),
+              canEdit&&h('button',{
+                type:'button', className:'btn btn-sm',
+                style:{fontSize:'11px',padding:'3px 8px',color:'var(--purple)',borderColor:'var(--purple)',background:'var(--purple-bg)'},
+                onClick:()=>{ const cur=form.scenarioDescription; set('scenarioDescription', cur?cur+'\n\n'+SCENARIO_TEMPLATE:SCENARIO_TEMPLATE); }
+              },'⊕ Insert Template')
+            ),
+            h('textarea',{className:'form-textarea',style:{flex:'1',minHeight:'120px',height:'100%',resize:'none',fontFamily:'var(--mono)',fontSize:'12px'},value:form.scenarioDescription,onChange:e=>set('scenarioDescription',e.target.value),readOnly:!canEdit})
+          ),
+          // Tags / Labels — editable label
+          h('div',{className:'form-group'},
+            h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'0'}},
+              h(EditableLabel,{fieldKey:'tags'}),
+              canEdit&&h(TagsTemplateDropdown,{onInsert:tpl=>{const cur=form.tags;set('tags',cur?cur+', '+tpl:tpl);}})
+            ),
+            h('input',{className:'form-input',value:form.tags,onChange:e=>set('tags',e.target.value),placeholder:'คั่นด้วย comma',readOnly:!canEdit})
+          ),
+          form.tags&&h('div',{style:{marginTop:'4px'}},form.tags.split(',').map(t=>t.trim()).filter(Boolean).map(t=>h('span',{key:t,className:'tag'},t)))
+        ),
+        activeTab==='steps'&&h('div',null,
+          h('div',{className:'section-title',style:{marginBottom:'12px'}},'Test Steps'),
+          form.steps.map((step,i)=>h('div',{key:step.id,className:'card-sm',style:{marginBottom:'12px'}},
+            h('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'10px'}},
+              h('span',{style:{fontWeight:'600',color:'var(--purple)'}},`Step ${i+1}`),
+              canEdit&&form.steps.length>1&&h('button',{className:'btn btn-sm btn-danger',onClick:()=>removeStep(i)},'ลบ Step')
+            ),
+            h('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'16px'}},
+              h('div',{className:'form-group'},h('label',{className:'form-label'},'Action / Step'),h('textarea',{className:'form-textarea',style:{minHeight:'140px'},value:step.action,onChange:e=>setStep(i,'action',e.target.value),readOnly:!canEdit})),
+              h('div',{className:'form-group'},h('label',{className:'form-label'},'Expected Result'),h('textarea',{className:'form-textarea',style:{minHeight:'140px'},value:step.expected,onChange:e=>setStep(i,'expected',e.target.value),readOnly:!canEdit})),
+              h('div',{className:'form-group'},h('label',{className:'form-label'},'Actual Result'),h('textarea',{className:'form-textarea',style:{minHeight:'140px'},value:step.actual,onChange:e=>setStep(i,'actual',e.target.value),readOnly:!canEdit}))
+            ),
+            h('div',{className:'form-group'},
+              h('label',{className:'form-label'},'Actual Result Files'),
+              h(FileList,{
+                files:step.files||[],
+                onAdd:(e)=>handleFile(e,i),
+                onDel:(fid)=>{const steps=[...form.steps];steps[i]={...steps[i],files:(steps[i].files||[]).filter(f=>f.id!==fid)};setForm(p=>({...p,steps}));setDirty(true);}
+              })
+            )
+          )),
+          canEdit&&h('button',{className:'btn',onClick:addStep},'+ เพิ่ม Step')
+        ),
+        activeTab==='files'&&h('div',null,
+          h('div',{className:'section-title'},'เอกสารแนบ (General)'),
+          h(FileList,{
+            files:form.files||[],
+            onAdd:(e)=>handleFile(e,-1),
+            onDel:(fid)=>{setForm(p=>({...p,files:(p.files||[]).filter(f=>f.id!==fid)}));setDirty(true);}
+          })
+        ),
+        activeTab==='defects'&&h(DefectsInTC,{tc:isEdit?tc:null,defects,setDefects,testCases,currentUser,canEdit,canDelete:canEdit,showToast,addLog,openDefectModal}),
+        activeTab==='history'&&h('div',null,
+          h('div',{className:'section-title'},'History'),
+          isEdit&&tc?h('div',{className:'flex-col',style:{gap:'0'}},
+            [{action:'Created',at:tc.createdAt,userId:tc.createdBy},{action:'Updated',at:tc.updatedAt,userId:tc.updatedBy}].filter(e=>e.at).map((entry,i)=>{
+              const userName=(users||[]).find(u=>u.id===entry.userId)?.name||entry.userId||'—';
+              return h('div',{key:i,className:'log-entry'},
+                h('span',{className:'log-time'},fmtDate(entry.at)),
+                h('span',{className:'log-msg'},entry.action,' โดย ',h('span',{className:'log-user'},userName))
+              );
+            })
+          ):h('p',{style:{color:'var(--text3)',fontSize:'13px'}},'History จะแสดงหลังบันทึก')
+        )
+      ),
+      h('div',{className:'modal-footer'},
+        canEdit&&h('button',{className:'btn',onClick:handleClose},'ยกเลิก'),
+        canEdit&&h('button',{
+          className:'btn',
+          style:{background:'var(--purple)',borderColor:'var(--purple)',color:'white'},
+          onClick:()=>dirty?setShowConfirm('save'):save()
+        },isEdit?'อัพเดท':'สร้าง Custom TC'),
+        !canEdit&&h('button',{className:'btn',onClick:onClose},'ปิด')
+      ),
+      showConfirm&&h(ConfirmModal,{
+        title:showConfirm==='close'?'ยกเลิกการแก้ไข?':'บันทึกข้อมูล?',
+        message:showConfirm==='close'?'มีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก ต้องการออกหรือไม่?':'ต้องการบันทึกการเปลี่ยนแปลงหรือไม่?',
+        danger:showConfirm==='close',
+        onConfirm:showConfirm==='close'?onClose:save,
+        onClose:()=>setShowConfirm(null)
+      })
+    )
+  );
+  return ReactDOM.createPortal(_portalEl, document.getElementById('modal-root'));
+}
+
 function DefectModal({ initialTcId, allTCs, defects, setDefects, currentUser, users, showToast, addLog, onClose, editDefect }) {
   const isEdit = !!editDefect;
-  const safeAllTCs = allTCs || [];
+  const editId = useRef(editDefect?.id ?? null); // stable ref — ไม่เปลี่ยนแม้ props re-render
+  const safeAllTCs = useRef(allTCs || []).current; // snapshot ณ ตอนเปิด modal — ไม่ re-compute ระหว่างพิมพ์
   const initForm = () => {
     if (isEdit && editDefect) {
       return {
@@ -3822,20 +4708,31 @@ function DefectModal({ initialTcId, allTCs, defects, setDefects, currentUser, us
         description: editDefect.description || '',
         targetDate: editDefect.targetDate || '',
         assignee: editDefect.assignee || '',
+        comment: editDefect.comment || '',
         relatedTcIds: Array.isArray(editDefect.relatedTcIds) ? editDefect.relatedTcIds : (editDefect.testCaseId ? [editDefect.testCaseId] : [])
       };
     }
-    return { title:'', severity:'Medium', status:'Open', description:'', targetDate:'', assignee:'', relatedTcIds: initialTcId ? [initialTcId] : [] };
+    return { title:'', severity:'Medium', status:'Open', description:'', targetDate:'', assignee:'', comment:'', relatedTcIds: initialTcId ? [initialTcId] : [] };
   };
   const [form, setForm] = useState(initForm);
   const [tcSearch, setTcSearch] = useState('');
+  const [commentError, setCommentError] = useState(false);
+  const commentRef = useRef(null);
 
   const toggleTC = (tcId) => setForm(p=>({...p, relatedTcIds:p.relatedTcIds.includes(tcId)?p.relatedTcIds.filter(x=>x!==tcId):[...p.relatedTcIds,tcId]}));
 
   const save = () => {
     if (!form.title.trim()) { showToast('กรุณาใส่ชื่อ Defect','error'); return; }
+    if (['Re-Open','Rejected'].includes(form.status) && !(form.comment||'').trim()) {
+      setCommentError(true);
+      showToast(form.status+' ต้องใส่ Comment ก่อนบันทึก','error');
+      setTimeout(()=>{ if(commentRef.current){ commentRef.current.scrollIntoView({behavior:'smooth',block:'center'}); commentRef.current.focus(); } },100);
+      return;
+    }
+    setCommentError(false);
     if (isEdit) {
-      setDefects(p=>p.map(x=>x.id===editDefect.id?{...x,...form,updatedAt:now()}:x));
+      const targetId = editId.current;
+      setDefects(p=>p.map(x=>x.id===targetId?{...x,...form,updatedAt:now()}:x));
       addLog('Update Defect','แก้ไข Defect: '+form.title);
       showToast('อัปเดต Defect สำเร็จ');
     } else {
@@ -3856,8 +4753,25 @@ function DefectModal({ initialTcId, allTCs, defects, setDefects, currentUser, us
         h('div',{className:'form-group'},h('label',{className:'form-label'},'Severity'),h('select',{className:'form-select',value:form.severity,onChange:e=>setForm(p=>({...p,severity:e.target.value}))},['Critical','High','Medium','Low'].map(o=>h('option',{key:o,value:o},o))))
       ),
       h('div',{className:'form-row'},
-        h('div',{className:'form-group'},h('label',{className:'form-label'},'Status'),h('select',{className:'form-select',value:form.status,onChange:e=>setForm(p=>({...p,status:e.target.value}))},['Open','Investigate','Ready to Test','Fixed','Re-Open','Closed','Rejected'].map(o=>h('option',{key:o,value:o},o)))),
+        h('div',{className:'form-group'},h('label',{className:'form-label'},'Status'),h('select',{className:'form-select',value:form.status,onChange:e=>{
+          const newStatus = e.target.value;
+          const needsComment = ['Re-Open','Rejected'].includes(newStatus);
+          const hadComment = ['Re-Open','Rejected'].includes(form.status);
+          setForm(p=>({...p, status:newStatus, comment: needsComment && !hadComment ? '' : p.comment}));
+          setCommentError(false);
+        }},['Open','Investigate','Ready to Test','Fixed','Re-Open','Closed','Rejected'].map(o=>h('option',{key:o,value:o},o)))),
         h('div',{className:'form-group'},h('label',{className:'form-label'},'Target Date'),h('input',{type:'date',className:'form-input',value:form.targetDate,onChange:e=>setForm(p=>({...p,targetDate:e.target.value}))}))
+      ),
+      ['Re-Open','Rejected'].includes(form.status)&&h('div',{className:'form-group'},
+        h('label',{className:'form-label',style:commentError?{color:'var(--red)'}:{}},'Comment ',h('span',{className:'req'},'*'),
+          commentError&&h('span',{style:{fontSize:'11px',color:'var(--red)',marginLeft:'8px',fontWeight:'400'}},'⚠ กรุณาใส่ Comment ก่อนบันทึก')
+        ),
+        h('textarea',{ref:commentRef,className:'form-textarea',value:form.comment||'',
+          onChange:e=>{ setForm(p=>({...p,comment:e.target.value})); if(e.target.value.trim()) setCommentError(false); },
+          placeholder:form.status==='Re-Open'?'กรุณาระบุเหตุผลที่ Re-Open...':'กรุณาระบุเหตุผลที่ Reject...',
+          autoFocus:true,
+          style:commentError?{border:'2px solid var(--red)',background:'var(--red-bg)',boxShadow:'0 0 0 3px rgba(229,9,20,0.15)'}:{}
+        })
       ),
       h('div',{className:'form-row'},
         h('div',{className:'form-group'},
@@ -3910,7 +4824,7 @@ function DefectModal({ initialTcId, allTCs, defects, setDefects, currentUser, us
 
 // ─── DEFECTS IN TC ────────────────────────────────────────────────────────────
 function DefectsInTC({ tc, defects, setDefects, testCases, currentUser, canEdit, canDelete, showToast, addLog, openDefectModal }) {
-  const tcDefects = tc ? defects.filter(d=>(d.relatedTcIds&&d.relatedTcIds.includes(tc.id))||(!d.relatedTcIds&&d.testCaseId===tc.id)) : [];
+  const tcDefects = tc ? defects.filter(d=>toArr(d.relatedTcIds).includes(tc.id)||(toArr(d.relatedTcIds).length===0&&d.testCaseId===tc.id)) : [];
   const del = (d) => { setDefects(p=>p.filter(x=>x.id!==d.id)); showToast('ลบ Defect สำเร็จ'); };
   if (!tc) return h('p',{style:{color:'var(--text3)',fontSize:'13px'}},'บันทึก TC ก่อน จึงจะเพิ่ม Defect ได้');
   return h('div',null,
@@ -3920,7 +4834,7 @@ function DefectsInTC({ tc, defects, setDefects, testCases, currentUser, canEdit,
     ),
     tcDefects.length===0?h('p',{style:{color:'var(--text3)',fontSize:'13px'}},'ยังไม่มี Defect ที่ผูกไว้'):
     tcDefects.map(d=>{
-      const relTcs=(d.relatedTcIds||[d.testCaseId]).map(id=>testCases.find(x=>x.id===id)).filter(Boolean);
+      const relTcs=toArr(d.relatedTcIds).length?toArr(d.relatedTcIds).map(id=>testCases.find(x=>x.id===id)).filter(Boolean):(d.testCaseId?[testCases.find(x=>x.id===d.testCaseId)].filter(Boolean):[]);
       return h('div',{key:d.id,className:'card-sm',style:{marginBottom:'8px'}},
         h('div',{style:{display:'flex',alignItems:'flex-start',justifyContent:'space-between'}},
           h('div',{style:{flex:1}},
@@ -3954,6 +4868,8 @@ function DefectsPage({ teamDefects, setDefects, testCases, teamTCs, teamTasks, t
   const [filterSev, setFilterSev] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [selected, setSelected] = useState([]);
+  const [defCommentPending, setDefCommentPending] = useState(null); // {defect, newStatus}
+  const [defCommentInput, setDefCommentInput] = useState('');
 
   const filtered = teamDefects.filter(d =>
     (!search || d.title.toLowerCase().includes(search.toLowerCase()) || (d.defectId||'').toLowerCase().includes(search.toLowerCase())) &&
@@ -3963,7 +4879,7 @@ function DefectsPage({ teamDefects, setDefects, testCases, teamTCs, teamTasks, t
   const exportDefects = () => {
     const list = selected.length ? filtered.filter(d=>selected.includes(d.id)) : filtered;
     const rows = list.map(d => {
-      const ids = d.relatedTcIds&&d.relatedTcIds.length ? d.relatedTcIds : (d.testCaseId?[d.testCaseId]:[]);
+      const ids = toArr(d.relatedTcIds).length ? toArr(d.relatedTcIds) : (d.testCaseId?[d.testCaseId]:[]);
       const relTcs = ids.map(id=>testCases.find(x=>x.id===id)).filter(Boolean);
       const tc = relTcs[0];
       const task = teamTasks.find(t=>t.id===tc?.taskId);
@@ -3978,7 +4894,15 @@ function DefectsPage({ teamDefects, setDefects, testCases, teamTCs, teamTasks, t
     showToast('Export Defects สำเร็จ');
   };
 
-  const updateStatus = (id, status) => { setDefects(p=>p.map(x=>x.id===id?{...x,status,updatedAt:now()}:x)); addLog('Update Defect','เปลี่ยน Status: '+status); };
+  const updateStatus = (defect, status) => {
+    if(['Re-Open','Rejected'].includes(status)){
+      setDefCommentPending({defect,newStatus:status});
+    } else {
+      setDefects(p=>p.map(x=>x.id===defect.id?{...x,status,updatedAt:now()}:x));
+      addLog('Update Defect','เปลี่ยน Status: '+status);
+      showToast('อัพเดทแล้ว');
+    }
+  };
   const deleteDefect = (id) => { setDefects(p=>p.filter(x=>x.id!==id)); showToast('ลบ Defect สำเร็จ'); };
   const cloneDefect = (d) => {
     const cloned = {...d, id:uid(), defectId:'DEF-'+uid().slice(0,5).toUpperCase(), createdAt:now(), createdBy:currentUser.id, relatedTcIds:[], testCaseId:null, title:'[Clone] '+d.title};
@@ -4023,7 +4947,7 @@ function DefectsPage({ teamDefects, setDefects, testCases, teamTCs, teamTasks, t
               h('th',null,'Defect ID'),h('th',null,'Title'),h('th',null,'Assignee'),h('th',null,'Severity'),h('th',null,'Status'),h('th',null,'Related Test Cases'),h('th',null,'Target Date'),h('th',null,'')
             )),
             h('tbody',null,filtered.map(d=>{
-              const ids = d.relatedTcIds&&d.relatedTcIds.length ? d.relatedTcIds : (d.testCaseId?[d.testCaseId]:[]);
+              const ids = toArr(d.relatedTcIds).length ? toArr(d.relatedTcIds) : (d.testCaseId?[d.testCaseId]:[]);
               const relTcs = ids.map(id=>testCases.find(x=>x.id===id)).filter(Boolean);
               return h('tr',{key:d.id},
                 h('td',null,h('input',{type:'checkbox',checked:selected.includes(d.id),onChange:e=>setSelected(p=>e.target.checked?[...p,d.id]:p.filter(x=>x!==d.id))})),
@@ -4049,7 +4973,7 @@ function DefectsPage({ teamDefects, setDefects, testCases, teamTCs, teamTasks, t
                   })()
                 ),
                 h('td',null,h('span',{className:'badge '+(DEF_SEVERITY_COLORS[d.severity]||'badge-gray')},d.severity)),
-                h('td',null,h('select',{className:'form-select',style:{width:'140px',padding:'4px 8px',fontSize:'12px'},value:d.status,onChange:e=>updateStatus(d.id,e.target.value)},['Open','Investigate','Ready to Test','Fixed','Re-Open','Closed','Rejected'].map(s=>h('option',{key:s,value:s},s)))),
+                h('td',null,h('select',{className:'form-select',style:{width:'140px',padding:'4px 8px',fontSize:'12px'},value:d.status,onChange:e=>updateStatus(d,e.target.value)},['Open','Investigate','Ready to Test','Fixed','Re-Open','Closed','Rejected'].map(s=>h('option',{key:s,value:s},s)))),
                 h('td',null,relTcs.length===0
                   ? h('span',{style:{fontSize:'12px',color:'var(--text3)'}},'—')
                   : h('div',{style:{display:'flex',flexWrap:'wrap',gap:'4px'}},relTcs.map(tc=>h('span',{key:tc.id,className:'tag',style:{fontSize:'11px'}},tc.title)))
@@ -4064,7 +4988,50 @@ function DefectsPage({ teamDefects, setDefects, testCases, teamTCs, teamTasks, t
             }))
           )
         ),
-
+    defCommentPending&&ReactDOM.createPortal(
+      h('div',{className:'modal-overlay',style:{zIndex:10001},onClick:e=>{if(e.target.className==='modal-overlay'){setDefCommentPending(null);setDefCommentInput('');}}},
+        h('div',{className:'modal modal-sm'},
+          h('div',{className:'modal-header'},
+            h('span',{className:'modal-title',style:{display:'flex',alignItems:'center',gap:'8px'}},
+              h('span',{className:'ms ms-sm',style:{color:'var(--amber)'}},'comment'),
+              'บังคับ Comment — '+defCommentPending.newStatus
+            ),
+            h('button',{className:'modal-close',onClick:()=>{setDefCommentPending(null);setDefCommentInput('');}},h('span',{className:'ms ms-sm'},'close'))
+          ),
+          h('div',{className:'modal-body'},
+            h('p',{style:{fontSize:'13px',color:'var(--text2)',marginBottom:'12px'}},
+              'Defect: ',h('strong',{style:{color:'var(--text)'}},defCommentPending.defect.title)
+            ),
+            h('div',{className:'form-group',style:{marginBottom:0}},
+              h('label',{className:'form-label'},'Comment ',h('span',{className:'req'},'*')),
+              h('textarea',{
+                className:'form-textarea',autoFocus:true,value:defCommentInput,
+                onChange:e=>setDefCommentInput(e.target.value),
+                placeholder:defCommentPending.newStatus==='Re-Open'?'กรุณาระบุเหตุผลที่ Re-Open...':'กรุณาระบุเหตุผลที่ Reject...',
+                style:{minHeight:'100px'}
+              })
+            )
+          ),
+          h('div',{className:'modal-footer'},
+            h('button',{className:'btn',onClick:()=>{setDefCommentPending(null);setDefCommentInput('');}}, 'ยกเลิก'),
+            h('button',{
+              className:'btn btn-primary',
+              disabled:!defCommentInput.trim(),
+              onClick:()=>{
+                if(!defCommentInput.trim()){showToast('กรุณาใส่ Comment','error');return;}
+                const {defect,newStatus}=defCommentPending;
+                setDefects(p=>p.map(x=>x.id===defect.id?{...x,status:newStatus,comment:defCommentInput,updatedAt:now()}:x));
+                addLog('Update Defect','เปลี่ยน Status: '+defect.title+' → '+newStatus);
+                showToast('อัพเดทแล้ว');
+                setDefCommentPending(null);
+                setDefCommentInput('');
+              }
+            },'✓ บันทึก')
+          )
+        )
+      ),
+      document.getElementById('modal-root')
+    )
   );
 }
 
@@ -4086,14 +5053,16 @@ function TeamSettingsPage({ currentTeam, currentUser, setTeams, members, setMemb
   };
   const approvePending = (req, role='edit') => {
     setMembers(p=>[...p,{id:uid(),teamId:req.teamId,userId:req.userId,role,joinedAt:now()}]);
-    setPendingMembers(p=>p.map(x=>x.id===req.id?{...x,status:'approved'}:x));
+    // mark ทุก record ของ userId+teamId นี้เป็น approved (ป้องกัน duplicate ค้าง)
+    setPendingMembers(p=>p.map(x=>(x.teamId===req.teamId&&x.userId===req.userId)?{...x,status:'approved'}:x));
     const u=users.find(u=>u.id===req.userId);
     addLog('Approve Member',`Approve ${u?.name||req.userId} เข้าทีม`);
     showToast(`อนุมัติ ${u?.name||'user'} สำเร็จ ✓`);
   };
 
   const rejectPending = (req) => {
-    setPendingMembers(p=>p.map(x=>x.id===req.id?{...x,status:'rejected'}:x));
+    // mark ทุก record ของ userId+teamId นี้เป็น rejected (ป้องกัน duplicate ค้าง)
+    setPendingMembers(p=>p.map(x=>(x.teamId===req.teamId&&x.userId===req.userId)?{...x,status:'rejected'}:x));
     const u=users.find(u=>u.id===req.userId);
     showToast(`ปฏิเสธ ${u?.name||'user'} แล้ว`,'error');
   };
