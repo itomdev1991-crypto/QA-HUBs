@@ -4714,7 +4714,73 @@ function CustomTCModal({ tc, task, project, testCases, setTestCases, defects, se
             ),
             h('input',{className:'form-input',value:form.tags,onChange:e=>set('tags',e.target.value),placeholder:'คั่นด้วย comma',readOnly:!canEdit})
           ),
-          form.tags&&h('div',{style:{marginTop:'4px'}},form.tags.split(',').map(t=>t.trim()).filter(Boolean).map(t=>h('span',{key:t,className:'tag'},t)))
+          form.tags&&h('div',{style:{marginTop:'4px'}},form.tags.split(',').map(t=>t.trim()).filter(Boolean).map(t=>h('span',{key:t,className:'tag'},t))),
+
+          // ══ Custom Fields 1–5 ══════════════════════════════════════
+          h('div',{style:{borderTop:'2px solid var(--purple)',paddingTop:'14px',marginTop:'8px'}},
+            h('div',{style:{display:'flex',alignItems:'center',gap:'6px',marginBottom:'12px'}},
+              h('span',{className:'ms ms-sm',style:{color:'var(--purple)'}},'dataset'),
+              h('span',{style:{fontSize:'13px',fontWeight:'600',color:'var(--purple)'}},'Custom Fields'),
+              h('span',{style:{fontSize:'11px',color:'var(--text3)',marginLeft:'4px'}},'คลิก ✏ ที่ชื่อ field เพื่อเปลี่ยนชื่อได้')
+            ),
+            // Row CF1 – CF2
+            h('div',{className:'form-row'},
+              h('div',{className:'form-group'},
+                h(EditableLabel,{fieldKey:'customField1'}),
+                h('input',{
+                  className:'form-input',
+                  value:form.customField1||'',
+                  onChange:e=>set('customField1',e.target.value),
+                  readOnly:!canEdit,
+                  placeholder:`ใส่ข้อมูล ${labels.customField1}`
+                })
+              ),
+              h('div',{className:'form-group'},
+                h(EditableLabel,{fieldKey:'customField2'}),
+                h('input',{
+                  className:'form-input',
+                  value:form.customField2||'',
+                  onChange:e=>set('customField2',e.target.value),
+                  readOnly:!canEdit,
+                  placeholder:`ใส่ข้อมูล ${labels.customField2}`
+                })
+              )
+            ),
+            // Row CF3 – CF4
+            h('div',{className:'form-row'},
+              h('div',{className:'form-group'},
+                h(EditableLabel,{fieldKey:'customField3'}),
+                h('input',{
+                  className:'form-input',
+                  value:form.customField3||'',
+                  onChange:e=>set('customField3',e.target.value),
+                  readOnly:!canEdit,
+                  placeholder:`ใส่ข้อมูล ${labels.customField3}`
+                })
+              ),
+              h('div',{className:'form-group'},
+                h(EditableLabel,{fieldKey:'customField4'}),
+                h('input',{
+                  className:'form-input',
+                  value:form.customField4||'',
+                  onChange:e=>set('customField4',e.target.value),
+                  readOnly:!canEdit,
+                  placeholder:`ใส่ข้อมูล ${labels.customField4}`
+                })
+              )
+            ),
+            // CF5 full-width
+            h('div',{className:'form-group'},
+              h(EditableLabel,{fieldKey:'customField5'}),
+              h('input',{
+                className:'form-input',
+                value:form.customField5||'',
+                onChange:e=>set('customField5',e.target.value),
+                readOnly:!canEdit,
+                placeholder:`ใส่ข้อมูล ${labels.customField5}`
+              })
+            )
+          )
         ),
         activeTab==='steps'&&h('div',null,
           h('div',{className:'section-title',style:{marginBottom:'12px'}},'Test Steps'),
