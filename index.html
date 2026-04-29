@@ -630,7 +630,7 @@ const detectionOpts = ['Positive','Negative'];
 
 // ─── GOOGLE SHEETS CONFIG ─────────────────────────────────────────────────────
 // ใส่ URL ของ Google Apps Script Web App ที่ Deploy แล้ว
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbwTexx7twK_2KwLAkhLERMiKEL559AJWjseJ9KH8hVXAh51VSNMyVBFepPUxB5qIq5b1Q/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbw050Cg85MwCvKqrzpbsfnE0_T4bEZHD7fSEFPlN48c0hJIyqzhIHmpihO2gj8DONXJ5Q/exec';
 const SS_ID   = '1NMcXR2rOgFRWVo-pG2icvY2vMwrtZBj91umGngwTGXI'; // Google Spreadsheet ID
 
 // ─── FIELD ENCRYPTION ────────────────────────────────────────────────────────
@@ -789,10 +789,10 @@ const SHEETS_VALID = new Set(['users','teams','members','projects','tasks','test
 
 const api = {
   // GET — GAS รองรับ CORS GET ปกติ
-  async getAll(sheet) {
+  async getAll(sheet, teamId) {
     if (!SHEETS_VALID.has(sheet)) throw new Error(`getAll: invalid sheet "${sheet}"`);
-
-    const url = `${GAS_URL}?action=getAll&sheet=${sheet}&t=${Date.now()}`;
+    const teamParam = teamId ? `&teamId=${encodeURIComponent(teamId)}` : '';
+    const url = `${GAS_URL}?action=getAll&sheet=${sheet}${teamParam}&t=${Date.now()}`;
     const res = await fetch(url, { redirect: 'follow' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = await res.json();
@@ -805,10 +805,15 @@ const api = {
   // GAS decode ด้วย Utilities.base64Decode(b64, Utilities.Charset.UTF_8)
   // Browser encode ด้วย TextEncoder → Uint8Array → base64
   async _write(payload) {
-    if (!payload.sheet || !SHEETS_VALID.has(payload.sheet)) {
-      const msg = `_write: invalid sheet "${payload.sheet}" (action=${payload.action})`;
-      console.error('[QAHUBs]', msg, payload);
-      throw new Error(msg);
+    // allow custom-sheet actions that have no SHEETS_VALID key
+    const TEAM_FREE_ACTIONS = new Set(['sendVerifyCode','verifyCode','createTeamSpreadsheet','getTeamSpreadsheetInfo',
+      'initCustomProjectSheet','updateCustomProjectSheetHeaders','syncCustomTCRow','deleteCustomTCRow','deleteCustomProjectSheet']);
+    if (!TEAM_FREE_ACTIONS.has(payload.action)) {
+      if (!payload.sheet || !SHEETS_VALID.has(payload.sheet)) {
+        const msg = `_write: invalid sheet "${payload.sheet}" (action=${payload.action})`;
+        console.error('[QAHUBs]', msg, payload);
+        throw new Error(msg);
+      }
     }
     // Encrypt sensitive fields before writing to Sheet
     const encPayload = { ...payload };
@@ -929,19 +934,14 @@ function App() {
       return;
     }
 
+    // ── Phase 1: global sheets (ไม่ต้องการ teamId) ──
+    const savedTeamId = getSession('qah_session_team', null)?.id || null;
     Promise.all([
       api.getAll('users'),
       api.getAll('teams'),
       api.getAll('members'),
-      api.getAll('projects'),
-      api.getAll('tasks'),
-      api.getAll('testCases'),
-      api.getAll('defects'),
-      api.getAll('logs'),
       api.getAll('loginLogs'),
-      api.getAll('pending'),
-    ]).then(([u,te,m,p,ta,tc,d,l,ll,pm]) => {
-      // Seed default users if Sheet is empty
+    ]).then(([u, te, m, ll]) => {
       if (u.length === 0) {
         api.bulkInsert('users', DEFAULT_USERS).then(() => setUsersState(DEFAULT_USERS));
       } else {
@@ -949,22 +949,52 @@ function App() {
       }
       setTeamsState(te);
       setMembersState(m);
-      setProjectsState(p);
-      setTasksState(ta);
-      setTestCasesState(tc);
-      setDefectsState(d);
-      setLogsState(l);
       setLoginLogsState(ll);
-      setPendingMembersState(pm);
-      setLoading(false);
 
-      // ── Auto-migrate: เข้ารหัสข้อมูลเก่าที่ยังเป็น plain-text ──
-      // ทำงาน background ไม่ block UI (ข้อมูลใน state เป็น plain แล้วจาก decryptObj)
-      migrateEncryption('users', u).catch(e => console.warn('[QAHUBs] migrate users:', e.message));
-      migrateEncryption('teams', te).catch(e => console.warn('[QAHUBs] migrate teams:', e.message));
+      // ── Phase 2: team sheets (ต้องการ teamId) ──
+      if (!savedTeamId) {
+        // ยังไม่ได้เลือกทีม — โหลดจาก localStorage แทน
+        setProjectsState(getSession('qah_projects', []));
+        setTasksState(getSession('qah_tasks', []));
+        setTestCasesState(getSession('qah_tcs', []));
+        setDefectsState(getSession('qah_defects', []));
+        setLogsState(getSession('qah_logs', []));
+        setPendingMembersState(getSession('qah_pending_members', []));
+        setLoading(false);
+        return;
+      }
+      Promise.all([
+        api.getAll('projects',  savedTeamId),
+        api.getAll('tasks',     savedTeamId),
+        api.getAll('testCases', savedTeamId),
+        api.getAll('defects',   savedTeamId),
+        api.getAll('logs',      savedTeamId),
+        api.getAll('pending',   savedTeamId),
+      ]).then(([p, ta, tc, d, l, pm]) => {
+        setProjectsState(p);
+        setTasksState(ta);
+        setTestCasesState(tc);
+        setDefectsState(d);
+        setLogsState(l);
+        setPendingMembersState(pm);
+        setLoading(false);
+        // ── Auto-migrate background ──
+        migrateEncryption('users', u).catch(e => console.warn('[QAHUBs] migrate users:', e.message));
+        migrateEncryption('teams', te).catch(e => console.warn('[QAHUBs] migrate teams:', e.message));
+      }).catch(e => {
+        // Phase 2 fallback
+        setProjectsState(getSession('qah_projects', []));
+        setTasksState(getSession('qah_tasks', []));
+        setTestCasesState(getSession('qah_tcs', []));
+        setDefectsState(getSession('qah_defects', []));
+        setLogsState(getSession('qah_logs', []));
+        setPendingMembersState(getSession('qah_pending_members', []));
+        setLoading(false);
+        console.warn('[QAHUBs] Phase 2 load failed:', e.message);
+      });
     }).catch(e => {
-      setSyncErr(e.message);
-      // Fallback to localStorage
+      // Phase 1 fallback
+      setSyncErr && setSyncErr(e.message);
       setUsersState(getSession('qah_users', DEFAULT_USERS));
       setTeamsState(getSession('qah_teams', []));
       setMembersState(getSession('qah_members', []));
@@ -979,6 +1009,32 @@ function App() {
     });
   }, []);
 
+  // ── Reload team data เมื่อ switch team ──
+  const prevTeamIdRef = useRef(null);
+  useEffect(() => {
+    const tid = currentTeam?.id || null;
+    if (!tid) return;                          // ยังไม่ได้เลือกทีม
+    if (prevTeamIdRef.current === tid) return; // ทีมเดิม ไม่ต้องโหลดซ้ำ
+    prevTeamIdRef.current = tid;
+    if (!GAS_URL) return;                      // ไม่มี GAS → ใช้ localStorage
+
+    Promise.all([
+      api.getAll('projects',  tid),
+      api.getAll('tasks',     tid),
+      api.getAll('testCases', tid),
+      api.getAll('defects',   tid),
+      api.getAll('logs',      tid),
+      api.getAll('pending',   tid),
+    ]).then(([p, ta, tc, d, l, pm]) => {
+      setProjectsState(p);
+      setTasksState(ta);
+      setTestCasesState(tc);
+      setDefectsState(d);
+      setLogsState(l);
+      setPendingMembersState(pm);
+    }).catch(e => console.warn('[QAHUBs] reload team data failed:', e.message));
+  }, [currentTeam?.id]);
+
   // ── Sync status indicator ──
   const [syncing, setSyncing] = useState(false);
   const syncTimerRef = useRef(null);
@@ -991,6 +1047,9 @@ function App() {
   const USE_GAS = !!GAS_URL;
   const USE_GAS_REF = useRef(USE_GAS);
   useEffect(() => { USE_GAS_REF.current = USE_GAS; }, [USE_GAS]);
+  // ref เพื่อให้ makeSet / syncSheet อ่านค่า currentTeam ล่าสุดได้โดยไม่ต้องใส่ใน deps
+  const currentTeamRef = useRef(currentTeam);
+  useEffect(() => { currentTeamRef.current = currentTeam; }, [currentTeam]);
 
   // ── localStorage keymap (fallback) ──
   const LS_KEY = { users:'qah_users', teams:'qah_teams', members:'qah_members',
@@ -998,7 +1057,10 @@ function App() {
     defects:'qah_defects', logs:'qah_logs', loginLogs:'qah_login_logs', pending:'qah_pending_members' };
 
   // ── Core sync: diff old vs new, push only changes ──
-  const syncSheet = useCallback((sheet, newData, oldData) => {
+  // Team sheets ที่ต้องการ teamId เพื่อ route ไปยัง Team SS ที่ถูกต้อง
+  const TEAM_SHEET_SET = new Set(['projects','tasks','testCases','defects','logs','pending']);
+
+  const syncSheet = useCallback((sheet, newData, oldData, teamId) => {
     if (!USE_GAS_REF.current) {
       setSession(LS_KEY[sheet] || sheet, newData);
       return;
@@ -1012,16 +1074,22 @@ function App() {
       setToast({ msg: `Sync ล้มเหลว (${action} ${sheet}): ${e.message}`, type:'error', id: uid() });
     };
 
+    // inject teamId สำหรับ team sheets
+    const withTeam = (item) => {
+      if (!TEAM_SHEET_SET.has(sheet) || !teamId) return item;
+      return item.teamId ? item : { ...item, teamId };
+    };
+
     // INSERT new rows
     newData.forEach(item => {
       if (!oldMap[item.id]) {
-        api.insert(sheet, item).catch(e => onErr('insert', item.id, e));
+        api.insert(sheet, withTeam(item)).catch(e => onErr('insert', item.id, e));
       }
     });
     // UPDATE changed rows
     newData.forEach(item => {
       if (oldMap[item.id] && JSON.stringify(oldMap[item.id]) !== JSON.stringify(item)) {
-        api.update(sheet, item).catch(e => onErr('update', item.id, e));
+        api.update(sheet, withTeam(item)).catch(e => onErr('update', item.id, e));
       }
     });
     // DELETE removed rows
@@ -1033,10 +1101,14 @@ function App() {
   }, []);
 
   // ── Wrapped setters: update React state + auto-sync to Sheets ──
+  // makeSet ส่ง teamId เข้า syncSheet สำหรับ team sheets
+  const TEAM_SHEET_KEYS = new Set(['projects','tasks','testCases','defects','logs','pending']);
   const makeSet = (stateSetter, sheet) => (fn) => {
     stateSetter(prev => {
       const next = typeof fn === 'function' ? fn(prev) : fn;
-      syncSheet(sheet, next, prev);
+      // ดึง teamId จาก currentTeamRef เพื่อ route ไป Team SS ที่ถูกต้อง
+      const tid = TEAM_SHEET_KEYS.has(sheet) ? (currentTeamRef.current?.id || null) : null;
+      syncSheet(sheet, next, prev, tid);
       return next;
     });
   };
@@ -1133,10 +1205,14 @@ function App() {
   const refreshFromSheets = useCallback(() => {
     if (!USE_GAS) { showToast('ยังไม่ได้ตั้งค่า GAS_URL', 'error'); return; }
     setLoading(true);
+    const tid = currentTeamRef.current?.id || null;
+    if (!tid) { showToast('กรุณาเลือกทีมก่อนโหลดข้อมูล', 'error'); setLoading(false); return; }
     Promise.all([
       api.getAll('users'), api.getAll('teams'), api.getAll('members'),
-      api.getAll('projects'), api.getAll('tasks'), api.getAll('testCases'),
-      api.getAll('defects'), api.getAll('logs'), api.getAll('loginLogs'), api.getAll('pending'),
+      api.getAll('projects',  tid), api.getAll('tasks',     tid),
+      api.getAll('testCases', tid), api.getAll('defects',   tid),
+      api.getAll('logs',      tid), api.getAll('loginLogs'),
+      api.getAll('pending',   tid),
     ]).then(([u,te,m,p,ta,tc,d,l,ll,pm]) => {
       setUsersState(u.length ? u : DEFAULT_USERS);
       setTeamsState(te); setMembersState(m); setProjectsState(p);
@@ -2085,7 +2161,7 @@ function InviteWaitingPage({ teamName, teamId, currentUser, pendingMembers, setP
 }
 
 // ─── TEAM SELECT PAGE ─────────────────────────────────────────────────────────
-function TeamSelectPage({ currentUser, teams, setTeams, members, setMembers, myTeams, setCurrentTeam, setPage, showToast, addLog, pendingMembers, setPendingMembers, autoJoinCode, setAutoJoinCode, processInvite, setInviteWaitingTeam }) {
+function TeamSelectPage({ currentUser, teams, setTeams, members, setMembers, myTeams, setCurrentTeam, setPage, showToast, addLog, pendingMembers, setPendingMembers, autoJoinCode, setAutoJoinCode, processInvite, setInviteWaitingTeam, USE_GAS }) {
   const [showCreate, setShowCreate] = useState(false);
   const [teamName, setTeamName] = useState('');
   const [inviteCode, setInviteCode] = useState(autoJoinCode || '');
@@ -2103,6 +2179,17 @@ function TeamSelectPage({ currentUser, teams, setTeams, members, setMembers, myT
     setCurrentTeam(t);
     setPage('dashboard');
     showToast(`ทีม "${teamName}" สร้างสำเร็จ!`);
+    // ── สร้าง Google Spreadsheet แยกสำหรับทีมใหม่ ──
+    if (USE_GAS) {
+      api.rawWrite({ action: 'createTeamSpreadsheet', teamId: t.id, teamName: t.name })
+        .then(res => {
+          if (res.ok && res.data?.url) {
+            console.log(`[QAHUBs] Team SS created: ${res.data.url}`);
+            showToast(`สร้าง Google Sheet สำหรับทีม "${t.name}" สำเร็จ`, 'success');
+          }
+        })
+        .catch(e => console.warn('[QAHUBs] createTeamSpreadsheet failed:', e.message));
+    }
   };
 
   const joinTeam = () => {
@@ -3048,7 +3135,7 @@ function ProjectsPage({ teamProjects, setProjects, tasks, teamTasks, currentTeam
       showToast('สร้าง Project สำเร็จ');
       // ── สร้าง Custom TC Sheet แยกใน Google Sheets เมื่อ tcMode = custom ──
       if (form.tcMode === 'custom' && USE_GAS) {
-        api.write({ action:'initCustomProjectSheet', projectId:np.id, projectName:np.name, customLabels:{} })
+        api.write({ action:'initCustomProjectSheet', projectId:np.id, projectName:np.name, customLabels:{}, teamId:currentTeam?.id||'' })
           .catch(e => console.warn('[QAHUBs] initCustomProjectSheet failed:', e.message));
       }
     }
@@ -3061,7 +3148,7 @@ function ProjectsPage({ teamProjects, setProjects, tasks, teamTasks, currentTeam
     showToast(`ลบ Project "${p.name}" และข้อมูลทั้งหมดสำเร็จ`);
     // ── ลบ Custom TC Sheet เมื่อลบ Project ที่เป็น custom mode ──
     if (p.tcMode === 'custom' && USE_GAS) {
-      api.write({ action:'deleteCustomProjectSheet', projectId:p.id })
+      api.write({ action:'deleteCustomProjectSheet', projectId:p.id, teamId:p.teamId||'' })
         .catch(e => console.warn('[QAHUBs] deleteCustomProjectSheet failed:', e.message));
     }
     setDelConfirm(null);
@@ -3295,7 +3382,7 @@ function TaskDetailPage({ navCtx, setNavCtx, projects, tasks, testCases, setTest
     showToast('ลบ Test Case สำเร็จ');
     // ── ลบ row ใน Custom TC Sheet (เฉพาะ custom mode project) ──
     if (USE_GAS && project?.tcMode === 'custom') {
-      api.write({ action:'deleteCustomTCRow', projectId:project.id, id:tc.id })
+      api.write({ action:'deleteCustomTCRow', projectId:project.id, id:tc.id, teamId:project?.teamId||'' })
         .catch(e => console.warn('[QAHUBs] deleteCustomTCRow failed:', e.message));
     }
     setDelConfirm(null);
@@ -4378,7 +4465,7 @@ function CustomTCModal({ tc, task, project, testCases, setTestCases, defects, se
     saveLabels(next);
     // ── อัปเดต header ของ Custom TC Sheet เมื่อเปลี่ยนชื่อ label ──
     if (USE_GAS) {
-      api.write({ action:'updateCustomProjectSheetHeaders', projectId:project?.id, customLabels:next })
+      api.write({ action:'updateCustomProjectSheetHeaders', projectId:project?.id, customLabels:next, teamId:project?.teamId||'' })
         .catch(e => console.warn('[QAHUBs] updateCustomProjectSheetHeaders failed:', e.message));
     }
   };
@@ -4422,8 +4509,8 @@ function CustomTCModal({ tc, task, project, testCases, setTestCases, defects, se
   };
 
   const SCENARIO_TEMPLATE = 'Scenario Description\n* อธิบายรายละเอียด\n\nPrerequisite\n1. Existing Customer\n2. ข้อมูลเพิ่มก่อนทดสอบ\n\nPre steps\n1. Log in URL : ใส่ URL\n2. ขั้นตอนการทดสอบ';
-  const blank = { title:'', priority:'Medium', detection:'Positive', status:'Not Start', scenarioDescription:'', tags:'', testData:'', comment:'', assignee:'', steps:[{id:uid(),action:'',expected:'',actual:'',files:[]}], files:[] };
-  const [form, setForm] = useState(isEdit ? {...blank,...tc, steps:(tc.steps&&tc.steps.length?tc.steps:[{id:uid(),action:'',expected:'',actual:'',files:[]}])} : blank);
+  const blank = { title:'', priority:'Medium', detection:'Positive', status:'Not Start', scenarioDescription:'', tags:'', testData:'', comment:'', assignee:'', customField1:'', customField2:'', customField3:'', customField4:'', customField5:'', steps:[{id:uid(),action:'',expected:'',actual:'',files:[]}], files:[] };
+  const [form, setForm] = useState(isEdit && tc ? {...blank,...tc, customField1:tc.customField1||'', customField2:tc.customField2||'', customField3:tc.customField3||'', customField4:tc.customField4||'', customField5:tc.customField5||'', steps:(tc.steps&&tc.steps.length?tc.steps:[{id:uid(),action:'',expected:'',actual:'',files:[]}])} : {...blank});
   const [dirty, setDirty] = useState(false);
   const [showConfirm, setShowConfirm] = useState(null);
   const [activeTab, setActiveTab] = useState('info');
@@ -4481,7 +4568,7 @@ function CustomTCModal({ tc, task, project, testCases, setTestCases, defects, se
       showToast('อัพเดท Test Case สำเร็จ');
       // ── sync row เข้า Custom TC Sheet ──
       if (USE_GAS) {
-        api.write({ action:'syncCustomTCRow', projectId:project?.id, projectName:project?.name, data:updated, customLabels })
+        api.write({ action:'syncCustomTCRow', projectId:project?.id, projectName:project?.name, data:updated, customLabels, teamId:project?.teamId||'' })
           .catch(e => console.warn('[QAHUBs] syncCustomTCRow failed:', e.message));
       }
     } else {
@@ -4491,7 +4578,7 @@ function CustomTCModal({ tc, task, project, testCases, setTestCases, defects, se
       showToast('สร้าง Custom Test Case สำเร็จ');
       // ── sync row ใหม่เข้า Custom TC Sheet ──
       if (USE_GAS) {
-        api.write({ action:'syncCustomTCRow', projectId:project?.id, projectName:project?.name, data:ntc, customLabels })
+        api.write({ action:'syncCustomTCRow', projectId:project?.id, projectName:project?.name, data:ntc, customLabels, teamId:project?.teamId||'' })
           .catch(e => console.warn('[QAHUBs] syncCustomTCRow failed:', e.message));
       }
     }
@@ -5036,7 +5123,135 @@ function DefectsPage({ teamDefects, setDefects, testCases, teamTCs, teamTasks, t
 }
 
 // ─── TEAM SETTINGS PAGE ───────────────────────────────────────────────────────
-function TeamSettingsPage({ currentTeam, currentUser, setTeams, members, setMembers, users, isAdmin, showToast, addLog, pendingMembers, setPendingMembers }) {
+
+// ══════════════════════════════════════════════════════════════════
+// TeamSpreadsheetTab — แสดง link และ info ของ Google Sheet ของทีม
+// ══════════════════════════════════════════════════════════════════
+function TeamSpreadsheetTab({ currentTeam, USE_GAS, showToast }) {
+  const [info, setInfo] = React.useState(null);    // { ssId, url, name }
+  const [loading, setLoading] = React.useState(false);
+  const [creating, setCreating] = React.useState(false);
+
+  // โหลด info เมื่อ mount
+  React.useEffect(() => {
+    if (!USE_GAS || !currentTeam?.id) return;
+    setLoading(true);
+    api.rawWrite({ action: 'getTeamSpreadsheetInfo', teamId: currentTeam.id })
+      .then(res => { if (res.ok) setInfo(res.data); })
+      .catch(e => console.warn('[QAHUBs] getTeamSpreadsheetInfo:', e.message))
+      .finally(() => setLoading(false));
+  }, [currentTeam?.id]);
+
+  const createSheet = () => {
+    setCreating(true);
+    api.rawWrite({ action: 'createTeamSpreadsheet', teamId: currentTeam.id, teamName: currentTeam.name })
+      .then(res => {
+        if (res.ok) {
+          setInfo(res.data);
+          showToast('สร้าง Google Sheet สำหรับทีมสำเร็จ', 'success');
+        } else {
+          showToast('สร้างไม่ได้: ' + res.error, 'error');
+        }
+      })
+      .catch(e => showToast('Error: ' + e.message, 'error'))
+      .finally(() => setCreating(false));
+  };
+
+  const cardStyle = { background:'var(--card)', border:'1px solid var(--border)', borderRadius:'12px', padding:'20px' };
+  const rowStyle  = { display:'flex', alignItems:'center', gap:'10px', marginBottom:'10px' };
+  const labelStyle = { fontSize:'12px', color:'var(--text3)', marginBottom:'4px' };
+  const valueStyle = { fontSize:'14px', color:'var(--text)', fontWeight:'500' };
+
+  return h('div', { style:{ padding:'8px 0', display:'flex', flexDirection:'column', gap:'16px' } },
+
+    // ── Header ──
+    h('div', { style:{ display:'flex', alignItems:'center', gap:'10px' } },
+      h('span', { className:'ms', style:{ fontSize:'28px', color:'var(--accent)' } }, 'table_chart'),
+      h('div', null,
+        h('div', { style:{ fontWeight:'700', fontSize:'16px' } }, 'Google Sheet ของทีม'),
+        h('div', { style:{ fontSize:'12px', color:'var(--text3)', marginTop:'2px' } },
+          'ข้อมูล Projects, Tasks, TestCases, Defects ถูกเก็บแยกใน Spreadsheet ของทีมนี้')
+      )
+    ),
+
+    // ── Status Card ──
+    loading
+      ? h('div', { style:{ ...cardStyle, textAlign:'center', color:'var(--text3)' } }, 'กำลังโหลด...')
+      : info?.ssId
+        ? h('div', { style: cardStyle },
+            // Sheet name + status
+            h('div', { style:{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'16px' } },
+              h('span', { style:{ width:'10px', height:'10px', borderRadius:'50%', background:'#22c55e', flexShrink:0 } }),
+              h('span', { style:{ fontWeight:'600', fontSize:'15px' } }, info.name || `QAHub — ${currentTeam.name}`),
+              h('span', { style:{ fontSize:'11px', color:'var(--text3)', background:'var(--bg)', border:'1px solid var(--border)', borderRadius:'4px', padding:'2px 8px' } }, 'Active')
+            ),
+
+            // ssId
+            h('div', { style:{ marginBottom:'12px' } },
+              h('div', { style: labelStyle }, 'Spreadsheet ID'),
+              h('div', { style:{ ...valueStyle, fontFamily:'monospace', fontSize:'12px', wordBreak:'break-all', color:'var(--text2)' } }, info.ssId)
+            ),
+
+            // Buttons
+            h('div', { style:{ display:'flex', gap:'10px', flexWrap:'wrap' } },
+              info.url && h('a', {
+                href: info.url, target:'_blank', rel:'noopener',
+                style:{ display:'inline-flex', alignItems:'center', gap:'6px',
+                  background:'var(--accent)', color:'#fff', border:'none', borderRadius:'8px',
+                  padding:'8px 16px', fontSize:'13px', fontWeight:'600', textDecoration:'none', cursor:'pointer' }
+              },
+                h('span', { className:'ms ms-sm' }, 'open_in_new'),
+                'เปิด Google Sheet'
+              ),
+              h('button', {
+                onClick: () => { navigator.clipboard?.writeText(info.ssId); showToast('คัดลอก Spreadsheet ID แล้ว'); },
+                style:{ display:'inline-flex', alignItems:'center', gap:'6px',
+                  background:'transparent', color:'var(--text2)', border:'1px solid var(--border)',
+                  borderRadius:'8px', padding:'8px 16px', fontSize:'13px', cursor:'pointer' }
+              },
+                h('span', { className:'ms ms-sm' }, 'content_copy'),
+                'คัดลอก ID'
+              )
+            )
+          )
+        : h('div', { style: cardStyle },
+            // ยังไม่มี Sheet
+            h('div', { style:{ textAlign:'center', padding:'20px 0' } },
+              h('span', { className:'ms', style:{ fontSize:'48px', color:'var(--text3)', display:'block', marginBottom:'12px' } }, 'add_chart'),
+              h('div', { style:{ fontWeight:'600', marginBottom:'6px' } }, 'ยังไม่มี Google Sheet สำหรับทีมนี้'),
+              h('div', { style:{ fontSize:'13px', color:'var(--text3)', marginBottom:'20px' } },
+                'สร้าง Spreadsheet แยกสำหรับทีมเพื่อเก็บข้อมูล Projects, Tasks, TestCases และ Defects'),
+              h('button', {
+                onClick: createSheet,
+                disabled: creating,
+                style:{ background:'var(--accent)', color:'#fff', border:'none', borderRadius:'8px',
+                  padding:'10px 24px', fontSize:'14px', fontWeight:'600', cursor: creating ? 'wait' : 'pointer',
+                  opacity: creating ? 0.7 : 1 }
+              }, creating ? 'กำลังสร้าง...' : '✨ สร้าง Google Sheet ของทีม')
+            )
+          ),
+
+    // ── Info boxes ──
+    h('div', { style:{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(180px,1fr))', gap:'10px' } },
+      [
+        { icon:'folder', label:'Projects', desc:'ข้อมูล Projects ทั้งหมดของทีม' },
+        { icon:'task_alt', label:'Tasks', desc:'Tasks ทุก Sprint' },
+        { icon:'fact_check', label:'TestCases', desc:'Standard + Custom TC' },
+        { icon:'bug_report', label:'Defects', desc:'Defect Tracking' },
+        { icon:'history', label:'Logs', desc:'Activity Log' },
+        { icon:'table_chart', label:'Custom TC Sheets', desc:'1 sheet ต่อ 1 Custom TC Project' },
+      ].map(item => h('div', { key: item.label, style:{ ...cardStyle, display:'flex', gap:'10px', alignItems:'flex-start', padding:'12px 14px' } },
+        h('span', { className:'ms', style:{ color:'var(--purple)', fontSize:'18px', marginTop:'1px' } }, item.icon),
+        h('div', null,
+          h('div', { style:{ fontWeight:'600', fontSize:'13px' } }, item.label),
+          h('div', { style:{ fontSize:'11px', color:'var(--text3)', marginTop:'2px' } }, item.desc)
+        )
+      ))
+    )
+  );
+}
+
+function TeamSettingsPage({ currentTeam, currentUser, setTeams, members, setMembers, users, isAdmin, showToast, addLog, pendingMembers, setPendingMembers, USE_GAS }) {
   const [tab, setTab] = useState('members');
   const teamMembers = members.filter(m=>m.teamId===currentTeam.id);
   const roles = ['admin','function','edit','view'];
@@ -5082,6 +5297,7 @@ function TeamSettingsPage({ currentTeam, currentUser, setTeams, members, setMemb
     {key:'pending',label:`Pending${pendingCount>0?' ('+pendingCount+')':''}`},
     {key:'permissions',label:'Permission Guide'},
     {key:'invite',label:'Invite'},
+    ...(USE_GAS ? [{key:'spreadsheet',label:'📊 Google Sheet'}] : []),
   ];
 
   return h('div',null,
@@ -5089,6 +5305,8 @@ function TeamSettingsPage({ currentTeam, currentUser, setTeams, members, setMemb
     h('div',{className:'tabs'},
       tabList.map(t=>h('div',{key:t.key,className:`tab${tab===t.key?' active':''}`,onClick:()=>setTab(t.key)},t.label))
     ),
+
+    tab==='spreadsheet'&&h(TeamSpreadsheetTab,{currentTeam,USE_GAS,showToast}),
 
     tab==='members'&&h('div',null,
       h('div',{className:'table-wrap'},
